@@ -16,6 +16,7 @@ from .checkpointer import Checkpointer
 from .condition_evaluator import ConditionEvaluator
 from .exceptions import ConfigurationError, ExecutionError, GraphStructureError
 from .graph_utils import GraphUtils
+from .graph_visualizer import GraphVisualizer
 from .logging import SmartGraphLogger
 from .memory import MemoryManager, MemoryState
 from .state_manager import StateManager
@@ -179,45 +180,19 @@ class SmartGraph(BaseModel):
     def add_edge(self, edge: "Edge") -> None:
         GraphUtils.add_edge(self.graph, edge)
 
-    def draw_graph(self, output_file: str | None = None) -> None:
-        pos = nx.spring_layout(self.graph)
-        plt.figure(figsize=(12, 8))
-        nx.draw(
-            self.graph,
-            pos,
-            with_labels=False,
-            node_color="lightblue",
-            node_size=3000,
-            font_size=10,
-            font_weight="bold",
-        )
+    def draw_graph(self, output_file: Optional[str] = None, **kwargs: Any) -> None:
+        """Draw the graph using the GraphVisualizer.
 
-        # Add edge labels
-        edge_labels = {}
-        for u, v, d in self.graph.edges(data=True):
-            if d["edge"].conditions:
-                condition_name = d["edge"].conditions[0].__name__
-                if condition_name == "<lambda>":
-                    condition_name = "condition"
-                edge_labels[(u, v)] = condition_name
-            else:
-                edge_labels[(u, v)] = ""
-        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, font_size=8)
+        Args:
+            output_file (Optional[str]): If provided, save the visualization to this file.
+            **kwargs: Additional keyword arguments for customization.
+        """
+        GraphVisualizer.draw_graph(self.graph, output_file, **kwargs)
 
-        # Add node labels
-        node_labels = {}
-        for node, data in self.graph.nodes(data=True):
-            actor_name = data["node"].actor.name
-            task_desc = data["node"].task.description
-            node_labels[node] = f"{actor_name}\n{task_desc}"
+    def generate_mermaid_diagram(self) -> str:
+        """Generate a Mermaid diagram representation of the graph.
 
-        nx.draw_networkx_labels(self.graph, pos, labels=node_labels, font_size=8)
-
-        plt.title("SmartGraph Conversation Flow")
-        plt.axis("off")
-
-        if output_file:
-            plt.savefig(output_file, format="png", dpi=300, bbox_inches="tight")
-            plt.close()
-        else:
-            plt.show()
+        Returns:
+            str: Mermaid diagram representation of the graph.
+        """
+        return GraphVisualizer.generate_mermaid_diagram(self.graph)
