@@ -17,6 +17,7 @@ from .graph_utils import GraphUtils
 from .logging import SmartGraphLogger
 from .memory import MemoryManager, MemoryState
 from .state_manager import StateManager
+from .task_executor import TaskExecutor
 
 # Constants
 DEFAULT_EDGE_WEIGHT = 1.0
@@ -37,26 +38,23 @@ class Node(BaseModel):
     state_manager: StateManager = Field(default_factory=StateManager)
     pre_execute: Optional[Callable] = None
     post_execute: Optional[Callable] = None
+    input_data: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        if self.pre_execute:
-            input_data = await self.pre_execute(input_data, self.state_manager.get_full_state())
-
+        self.input_data = input_data
         try:
-            output = await self.actor.perform_task(self.task, input_data, self.state_manager.get_full_state())
-        except Exception as e:
+            output = await TaskExecutor.execute_node_task(self)
+            return output
+        except ExecutionError as e:
             raise ExecutionError(f"Error executing node {self.id}: {str(e)}", node_id=self.id)
-
-        if self.post_execute:
-            output = await self.post_execute(output, self.state_manager.get_full_state())
-
-        return output
 
     async def update_state(self, new_state: Dict[str, Any]) -> None:
         for key, value in new_state.items():
             self.state_manager.update_state(key, value)
+
+
 class Edge(BaseModel):
     source_id: str
     target_id: str
@@ -78,6 +76,7 @@ class Edge(BaseModel):
 
 
 logger = SmartGraphLogger.get_logger()
+
 
 class SmartGraph(BaseModel):
     graph: nx.DiGraph = Field(default_factory=nx.DiGraph)
@@ -105,7 +104,7 @@ class SmartGraph(BaseModel):
         while not should_exit:
             try:
                 current_node = self.graph.nodes[current_node_id]["node"]
-                node_output = await current_node.execute(input_data)
+                node_output = await TaskExecutor.execute_node_task(current_node)
 
                 # Update the state using reducer functions
                 for key, value in node_output.items():
@@ -144,7 +143,7 @@ class SmartGraph(BaseModel):
                 current_node_id = valid_edges[0].target_id
 
                 # Update input_data for the next iteration
-                input_data = node_output
+                input_data = node_output  # noqa: F841
 
             except ExecutionError as e:
                 logger.error(f"Execution error: {str(e)}")
@@ -164,7 +163,7 @@ class SmartGraph(BaseModel):
     def add_node(self, node: BaseNode) -> None:
         GraphUtils.add_node(self.graph, node)
 
-    def add_edge(self, edge: 'Edge') -> None:
+    def add_edge(self, edge: "Edge") -> None:
         GraphUtils.add_edge(self.graph, edge)
 
     def draw_graph(self, output_file: str | None = None) -> None:

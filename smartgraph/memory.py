@@ -12,22 +12,28 @@ from .state_manager import StateManager
 MAX_CONVERSATION_HISTORY = 1000
 LONG_TERM_MEMORY_TTL = 3600
 
+
 class ShortTermMemory(TypedDict):
     last_input: str
     last_response: str
     context: Dict[str, Any]
 
+
 class LongTermMemory(BaseModel):
-    conversation_history: deque = Field(default_factory=lambda: deque(maxlen=MAX_CONVERSATION_HISTORY))
+    conversation_history: deque = Field(
+        default_factory=lambda: deque(maxlen=MAX_CONVERSATION_HISTORY)
+    )
     max_response_length: int = 0
     user_preferences: Dict[str, Any] = Field(default_factory=dict)
     last_accessed: Dict[str, float] = Field(default_factory=dict)
+
 
 class MemoryState(BaseModel):
     short_term: ShortTermMemory = Field(
         default_factory=lambda: ShortTermMemory(last_input="", last_response="", context={})
     )
     long_term: LongTermMemory = Field(default_factory=LongTermMemory)
+
 
 class MemoryManager:
     def __init__(self):
@@ -56,7 +62,7 @@ class MemoryManager:
             else:
                 self.long_term_manager.update_state(key, value)
                 setattr(self.state.long_term, key, self.long_term_manager.get_state(key))
-            
+
             self.state.long_term.last_accessed[key] = time()
 
     async def get_short_term(self, key: str) -> Any:
@@ -76,7 +82,7 @@ class MemoryManager:
             for key, last_accessed in self.state.long_term.last_accessed.items():
                 if current_time - last_accessed > LONG_TERM_MEMORY_TTL:
                     keys_to_remove.append(key)
-            
+
             for key in keys_to_remove:
                 if hasattr(self.state.long_term, key):
                     delattr(self.state.long_term, key)
