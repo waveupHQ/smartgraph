@@ -16,6 +16,7 @@ from .exceptions import ConfigurationError, ExecutionError, GraphStructureError
 from .graph_utils import GraphUtils
 from .logging import SmartGraphLogger
 from .memory import MemoryManager, MemoryState
+from .state_manager import StateManager
 
 # Constants
 DEFAULT_EDGE_WEIGHT = 1.0
@@ -31,37 +32,31 @@ def default_reducer(old_value: Any, new_value: Any) -> Any:
 
 class Node(BaseModel):
     id: str
-    actor: Any  # Change this to Any to allow any subclass of BaseActor
+    actor: BaseActor
     task: Task
-    state: Dict[str, Any] = Field(default_factory=dict)
+    state_manager: StateManager = Field(default_factory=StateManager)
     pre_execute: Optional[Callable] = None
     post_execute: Optional[Callable] = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def __init__(self, **data):
-        super().__init__(**data)
-        if not isinstance(self.actor, BaseActor):
-            raise ValueError("actor must be an instance of BaseActor or its subclasses")
-
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         if self.pre_execute:
-            input_data = await self.pre_execute(input_data, self.state)
+            input_data = await self.pre_execute(input_data, self.state_manager.get_full_state())
 
         try:
-            output = await self.actor.perform_task(self.task, input_data, self.state)
+            output = await self.actor.perform_task(self.task, input_data, self.state_manager.get_full_state())
         except Exception as e:
             raise ExecutionError(f"Error executing node {self.id}: {str(e)}", node_id=self.id)
 
         if self.post_execute:
-            output = await self.post_execute(output, self.state)
+            output = await self.post_execute(output, self.state_manager.get_full_state())
 
         return output
 
     async def update_state(self, new_state: Dict[str, Any]) -> None:
-        self.state.update(new_state)
-
-
+        for key, value in new_state.items():
+            self.state_manager.update_state(key, value)
 class Edge(BaseModel):
     source_id: str
     target_id: str
