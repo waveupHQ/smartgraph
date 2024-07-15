@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .base import BaseActor, BaseNode, Task
 from .checkpointer import Checkpoint, Checkpointer
+from .exceptions import ConfigurationError, ExecutionError, GraphStructureError
+from .logging import SmartGraphLogger
 from .memory import MemoryManager, MemoryState
 
 ReducerFunction: TypeAlias = Callable[[Any, Any], Any]
@@ -34,7 +36,10 @@ class Node(BaseModel):
         if self.pre_execute:
             input_data = self.pre_execute(input_data, self.state)
 
-        output = self.actor.perform_task(self.task, input_data, self.state)
+        try:
+            output = self.actor.perform_task(self.task, input_data, self.state)
+        except Exception as e:
+            raise ExecutionError(f"Error executing node {self.id}: {str(e)}", node_id=self.id) from e
 
         if self.post_execute:
             output = self.post_execute(output, self.state)
@@ -65,7 +70,7 @@ class Edge(BaseModel):
         return False
 
 
-logger = logging.getLogger(__name__)
+logger = SmartGraphLogger.get_logger()
 
 
 class SmartGraph(BaseModel):
@@ -79,7 +84,7 @@ class SmartGraph(BaseModel):
         self, start_node_id: str, input_data: Dict[str, Any], thread_id: str
     ) -> Dict[str, Any]:
         if start_node_id not in self.graph.nodes:
-            raise ValueError(f"Start node '{start_node_id}' not found in the graph")
+            raise GraphStructureError(f"Start node '{start_node_id}' not found in the graph")
 
         latest_checkpoint = self.checkpointer.get_latest_checkpoint(thread_id)
         if latest_checkpoint:
@@ -134,22 +139,34 @@ class SmartGraph(BaseModel):
                 # Update input_data for the next iteration
                 input_data = node_output
 
+            except ExecutionError as e:
+                logger.error(f"Execution error: {str(e)}")
+                break
             except Exception as e:
-                logger.error(f"Error executing node {current_node_id}: {str(e)}")
+                logger.error(f"Unexpected error: {str(e)}")
                 break
 
         return self.memory_manager.state.dict(), should_exit
 
     def add_node(self, node: Node):
+        if node.id in self.graph.nodes:
+            raise ConfigurationError(f"Node with id '{node.id}' already exists in the graph")
         self.graph.add_node(node.id, node=node)
 
     def add_edge(self, edge: Edge):
+        if edge.source_id not in self.graph.nodes or edge.target_id not in self.graph.nodes:
+            logger.error(f"Attempted to add invalid edge: {edge.source_id} -> {edge.target_id}")
+            raise GraphStructureError(f"Invalid edge: {edge.source_id} -> {edge.target_id}")
         self.graph.add_edge(edge.source_id, edge.target_id, edge=edge)
+        logger.info(f"Added edge: {edge.source_id} -> {edge.target_id}")
 
     def _execute_path(self, start_node_id: str, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        return self.execute(start_node_id, input_data)
+        logger.debug(f"Executing path starting from node {start_node_id}")
+        result, _ = self.execute(start_node_id, input_data, thread_id=str(uuid.uuid4()))
+        return result
 
     def _combine_results(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        logger.debug("Combining results from multiple paths")
         combined = {}
         for result in results:
             for key, value in result.items():
@@ -158,9 +175,11 @@ class SmartGraph(BaseModel):
                     combined[key] = reducer(combined[key], value)
                 else:
                     combined[key] = value
+        logger.debug("Results combined successfully")
         return combined
 
     def draw_graph(self, output_file: Optional[str] = None):
+        logger.info("Drawing graph visualization")
         pos = nx.spring_layout(self.graph)
         plt.figure(figsize=(12, 8))
         nx.draw(
@@ -200,5 +219,7 @@ class SmartGraph(BaseModel):
         if output_file:
             plt.savefig(output_file, format="png", dpi=300, bbox_inches="tight")
             plt.close()
+            logger.info(f"Graph visualization saved to {output_file}")
         else:
             plt.show()
+            logger.info("Graph visualization displayed")

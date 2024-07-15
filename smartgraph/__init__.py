@@ -3,6 +3,15 @@
 from .actors import Actor, AIActor, HumanActor
 from .base import BaseActor, BaseNode, Task
 from .core import Edge, Node, SmartGraph
+from .exceptions import (
+    ConfigurationError,
+    ExecutionError,
+    GraphStructureError,
+    MemoryError,
+    SmartGraphException,
+    ValidationError,
+)
+from .logging import SmartGraphLogger
 from .memory import MemoryManager
 from .reducers import dict_update_reducer, list_append_reducer, max_reducer
 
@@ -20,6 +29,13 @@ __all__ = [
     "dict_update_reducer",
     "list_append_reducer",
     "max_reducer",
+    "SmartGraphException",
+    "ExecutionError",
+    "ConfigurationError",
+    "ValidationError",
+    "MemoryError",
+    "GraphStructureError",
+    "SmartGraphLogger",
 ]
 
 __version__ = "0.1.0"
