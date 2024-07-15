@@ -7,6 +7,8 @@ SmartGraph is a Python library for building stateful, multi-actor applications w
 - **Cycles**: Define flows that involve cycles, essential for most agentic architectures.
 - **Controllability**: Fine-grained control over both the flow and state of your application.
 - **Persistence**: Built-in persistence for advanced human-in-the-loop and memory features.
+- **Error Handling**: Robust exception hierarchy for precise error management.
+- **Logging**: Comprehensive logging system for debugging and monitoring.
 
 ## Installation
 
@@ -45,6 +47,55 @@ for edge in [edge1, edge2, edge3]:
 
 final_output = graph.execute("start", {"user_input": "Hello, AI!"})
 print("Final output:", final_output)
+```
+
+## Error Handling and Logging
+
+SmartGraph provides a robust error handling system and comprehensive logging capabilities to help you debug and monitor your applications.
+
+### Exception Hierarchy
+
+SmartGraph defines a set of custom exceptions to handle various error scenarios:
+
+- `SmartGraphException`: Base exception for all SmartGraph-related errors.
+- `ExecutionError`: Raised when there's an error during the execution of a node or workflow.
+- `ConfigurationError`: Raised when there's an error in the configuration of SmartGraph components.
+- `ValidationError`: Raised when there's a validation error in inputs or outputs.
+- `MemoryError`: Raised when there's an error related to memory management.
+- `GraphStructureError`: Raised when there's an error in the structure of the SmartGraph.
+
+Example usage:
+
+```python
+from smartgraph.exceptions import ExecutionError
+
+try:
+    # Some SmartGraph operation
+    pass
+except ExecutionError as e:
+    print(f"An error occurred during execution: {e}")
+```
+
+### Logging
+
+SmartGraph uses a centralized logging system through the `SmartGraphLogger` class. This logger is automatically used by SmartGraph components, but you can also use it in your own code:
+
+```python
+from smartgraph.logging import SmartGraphLogger
+
+logger = SmartGraphLogger.get_logger()
+
+logger.info("Starting the application")
+logger.debug("Detailed debug information")
+logger.warning("A warning occurred")
+logger.error("An error occurred")
+```
+
+You can configure the logging level and add additional file handlers:
+
+```python
+logger.set_level("DEBUG")
+logger.add_file_handler("app.log", "INFO")
 ```
 
 ## Documentation
