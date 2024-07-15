@@ -1,8 +1,8 @@
-# smartgraph/checkpointer.py
-
+# checkpointer.py
 import json
 from typing import Any, Dict, List, Optional
 
+import aiofiles
 from pydantic import BaseModel
 
 
@@ -17,11 +17,11 @@ class Checkpointer:
         self.storage_path = storage_path
         self.checkpoints: Dict[str, Dict[str, Checkpoint]] = {}
 
-    def save_checkpoint(self, thread_id: str, checkpoint: Checkpoint):
+    async def save_checkpoint(self, thread_id: str, checkpoint: Checkpoint):
         if thread_id not in self.checkpoints:
             self.checkpoints[thread_id] = {}
         self.checkpoints[thread_id][checkpoint.node_id] = checkpoint
-        self._save_to_disk()
+        await self._save_to_disk()
 
     def get_checkpoint(self, thread_id: str, node_id: str) -> Optional[Checkpoint]:
         return self.checkpoints.get(thread_id, {}).get(node_id)
@@ -32,20 +32,21 @@ class Checkpointer:
             return None
         return max(thread_checkpoints.values(), key=lambda c: c.node_id)
 
-    def _save_to_disk(self):
-        with open(self.storage_path, "w") as f:
-            json.dump(
-                {
-                    tid: {nid: cp.dict() for nid, cp in thread.items()}
-                    for tid, thread in self.checkpoints.items()
-                },
-                f,
+    async def _save_to_disk(self):
+        async with aiofiles.open(self.storage_path, "w") as f:
+            await f.write(
+                json.dumps(
+                    {
+                        tid: {nid: cp.dict() for nid, cp in thread.items()}
+                        for tid, thread in self.checkpoints.items()
+                    }
+                )
             )
 
-    def load_from_disk(self):
+    async def load_from_disk(self):
         try:
-            with open(self.storage_path, "r") as f:
-                data = json.load(f)
+            async with aiofiles.open(self.storage_path, "r") as f:
+                data = json.loads(await f.read())
                 self.checkpoints = {
                     tid: {nid: Checkpoint(**cp) for nid, cp in thread.items()}
                     for tid, thread in data.items()

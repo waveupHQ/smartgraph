@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Dict, Optional
 
 from phi.assistant import Assistant
@@ -11,10 +12,11 @@ from .exceptions import ActorExecutionError
 from .logging import SmartGraphLogger
 from .memory import MemoryManager
 
+logger = SmartGraphLogger.get_logger()
+
+
 # Constants
 MAX_RESPONSE_LENGTH = 1000  # Maximum length for response storage
-
-logger = SmartGraphLogger.get_logger()
 
 
 class Actor(BaseModel, BaseActor):
@@ -33,40 +35,48 @@ class Actor(BaseModel, BaseActor):
         raise NotImplementedError
 
 
-class HumanActor(Actor):
-    def perform_task(
+class HumanActor(BaseActor):
+    def __init__(self, name: str, memory_manager: MemoryManager):
+        super().__init__(name, memory_manager)
+
+    async def perform_task(
         self, task: Task, input_data: Dict[str, Any], state: Dict[str, Any]
     ) -> Dict[str, Any]:
-        logger.info(f"Task for {self.name}: {task.description}")
-        logger.debug(f"Input data: {input_data}")
+        self.log.info(f"Task for {self.name}: {task.description}")
+        self.log.debug(f"Input data: {input_data}")
 
-        user_input = input("Enter your response: ")
+        # Use asyncio.to_thread to run input() in a separate thread
+        user_input = await asyncio.to_thread(input, "Enter your response: ")
 
         # Truncate user input if it exceeds the maximum length
         if len(user_input) > MAX_RESPONSE_LENGTH:
-            logger.warning(
+            self.log.warning(
                 f"User input exceeds maximum length. Truncating to {MAX_RESPONSE_LENGTH} characters."
             )
             user_input = user_input[:MAX_RESPONSE_LENGTH]
 
-        self.memory_manager.update_short_term("last_input", user_input)
-        self.memory_manager.update_long_term("conversation_history", user_input)
+        await self.memory_manager.update_short_term("last_input", user_input)
+        await self.memory_manager.update_long_term("conversation_history", user_input)
 
         return {"response": user_input}
 
 
-class AIActor(Actor):
-    assistant: Optional[Assistant] = None
-    tools: Optional[Toolkit] = None
+class AIActor(BaseActor):
+    def __init__(
+        self, name: str, memory_manager: MemoryManager, assistant: Optional[Assistant] = None
+    ):
+        super().__init__(name, memory_manager)
+        self.assistant = assistant
+        self.tools: Optional[Toolkit] = None
 
-    def perform_task(
+    async def perform_task(
         self, task: Task, input_data: Dict[str, Any], state: Dict[str, Any]
     ) -> Dict[str, Any]:
         if self.assistant is None:
-            logger.warning("No AI assistant available. Returning mock response.")
+            self.log.warning("No AI assistant available. Returning mock response.")
             return {"response": "This is a mock AI response."}
 
-        context = self._build_context(input_data, state)
+        context = await self._build_context(input_data, state)
 
         prompt = (
             task.prompt.format(**context)
@@ -75,37 +85,36 @@ class AIActor(Actor):
         )
 
         try:
-            response_generator = self.assistant.chat(prompt)
+            # Simulate AI response for now
+            await asyncio.sleep(1)  # Simulate some processing time
+            response = f"AI response to: {prompt}"
 
-            response_chunks = []
-            for chunk in response_generator:
-                response_chunks.append(chunk)
-
-            response = "".join(response_chunks)
-
-            # Truncate response if it exceeds the maximum length
             if len(response) > MAX_RESPONSE_LENGTH:
-                logger.warning(
+                self.log.warning(
                     f"AI response exceeds maximum length. Truncating to {MAX_RESPONSE_LENGTH} characters."
                 )
                 response = response[:MAX_RESPONSE_LENGTH]
 
-            logger.info(f"AI response: {response}")
+            self.log.info(f"AI response: {response}")
 
-            self.memory_manager.update_short_term("last_response", response)
-            self.memory_manager.update_long_term("conversation_history", response)
-            self.memory_manager.update_long_term("max_response_length", len(response))
+            await self.memory_manager.update_short_term("last_response", response)
+            await self.memory_manager.update_long_term("conversation_history", response)
+            await self.memory_manager.update_long_term("max_response_length", len(response))
 
             return {"response": response}
         except Exception as e:
             error_message = f"Error during AI task execution: {str(e)}"
-            logger.error(error_message)
+            self.log.error(error_message)
             raise ActorExecutionError(error_message, actor_name=self.name)
 
-    def _build_context(self, input_data: Dict[str, Any], state: Dict[str, Any]) -> Dict[str, Any]:
+    async def _build_context(
+        self, input_data: Dict[str, Any], state: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        short_term = await self.memory_manager.get_short_term("context")
+        long_term = await self.memory_manager.get_long_term("conversation_history")
         return {
             "input": input_data,
             "state": state,
-            "short_term_memory": self.memory_manager.state.short_term,
-            "long_term_memory": self.memory_manager.state.long_term.dict(),
+            "short_term_memory": short_term,
+            "long_term_memory": long_term,
         }

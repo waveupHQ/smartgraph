@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable, Dict, List, Optional, TypeAlias
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeAlias
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -28,8 +29,8 @@ def default_reducer(old_value: Any, new_value: Any) -> Any:
 
 
 class Node(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    actor: BaseActor
+    id: str
+    actor: Any  # Change this to Any to allow any subclass of BaseActor
     task: Task
     state: Dict[str, Any] = Field(default_factory=dict)
     pre_execute: Optional[Callable] = None
@@ -37,23 +38,26 @@ class Node(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def __init__(self, **data):
+        super().__init__(**data)
+        if not isinstance(self.actor, BaseActor):
+            raise ValueError("actor must be an instance of BaseActor or its subclasses")
+
+    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         if self.pre_execute:
-            input_data = self.pre_execute(input_data, self.state)
+            input_data = await self.pre_execute(input_data, self.state)
 
         try:
-            output = self.actor.perform_task(self.task, input_data, self.state)
+            output = await self.actor.perform_task(self.task, input_data, self.state)
         except Exception as e:
-            raise ExecutionError(
-                f"Error executing node {self.id}: {str(e)}", node_id=self.id
-            )  # noqa: B904
+            raise ExecutionError(f"Error executing node {self.id}: {str(e)}", node_id=self.id)
 
         if self.post_execute:
-            output = self.post_execute(output, self.state)
+            output = await self.post_execute(output, self.state)
 
         return output
 
-    def update_state(self, new_state: Dict[str, Any]) -> None:
+    async def update_state(self, new_state: Dict[str, Any]) -> None:
         self.state.update(new_state)
 
 
@@ -84,12 +88,13 @@ class SmartGraph(BaseModel):
     graph: nx.DiGraph = Field(default_factory=nx.DiGraph)
     memory_manager: MemoryManager = Field(default_factory=MemoryManager)
     checkpointer: Checkpointer = Field(default_factory=Checkpointer)
+    checkpoint_frequency: int = 5  # Save checkpoint every 5 nodes
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def execute(
+    async def execute(
         self, start_node_id: str, input_data: Dict[str, Any], thread_id: str
-    ) -> tuple[Dict[str, Any], bool]:
+    ) -> Tuple[Dict[str, Any], bool]:
         if start_node_id not in self.graph.nodes:
             raise GraphStructureError(f"Start node '{start_node_id}' not found in the graph")
 
@@ -101,14 +106,15 @@ class SmartGraph(BaseModel):
             current_node_id = start_node_id
 
         should_exit = False
+        node_count = 0
         while not should_exit:
             try:
                 current_node = self.graph.nodes[current_node_id]["node"]
-                node_output = current_node.execute(input_data)
+                node_output = await current_node.execute(input_data)
 
                 # Update the state using reducer functions
                 for key, value in node_output.items():
-                    self.memory_manager.update_short_term(key, value)
+                    await self.memory_manager.update_short_term(key, value)
 
                 # Check for exit condition
                 if node_output.get("response", "").lower() == "exit":
@@ -129,13 +135,15 @@ class SmartGraph(BaseModel):
                 if not valid_edges:
                     break
 
-                # Save checkpoint
-                checkpoint = Checkpoint(
-                    node_id=current_node_id,
-                    state=self.memory_manager.state.dict(),
-                    next_nodes=[edge.target_id for edge in valid_edges],
-                )
-                self.checkpointer.save_checkpoint(thread_id, checkpoint)
+                # Save checkpoint (now less frequent)
+                node_count += 1
+                if self._should_save_checkpoint(node_count):
+                    checkpoint = Checkpoint(
+                        node_id=current_node_id,
+                        state=self.memory_manager.state.dict(),
+                        next_nodes=[edge.target_id for edge in valid_edges],
+                    )
+                    await self.checkpointer.save_checkpoint(thread_id, checkpoint)
 
                 # Choose the next node (simplified for now)
                 current_node_id = valid_edges[0].target_id
@@ -150,33 +158,27 @@ class SmartGraph(BaseModel):
                 logger.error(f"Unexpected error: {str(e)}")
                 break
 
+        # Cleanup long-term memory
+        await self.memory_manager.cleanup_long_term_memory()
+
         return self.memory_manager.state.dict(), should_exit
 
-    def add_node(self, node: Node) -> None:
+    def _should_save_checkpoint(self, node_count: int) -> bool:
+        return node_count % self.checkpoint_frequency == 0
+
+    def add_node(self, node: BaseNode) -> None:
         if node.id in self.graph.nodes:
-            raise ConfigurationError(f"Node with id '{node.id}' already exists in the graph")
+            raise GraphStructureError(f"Node with id '{node.id}' already exists in the graph")
         self.graph.add_node(node.id, node=node)
 
-    def add_edge(self, edge: Edge) -> None:
+    def add_edge(self, edge: "Edge") -> None:
         if edge.source_id not in self.graph.nodes or edge.target_id not in self.graph.nodes:
             raise GraphStructureError(f"Invalid edge: {edge.source_id} -> {edge.target_id}")
         self.graph.add_edge(edge.source_id, edge.target_id, edge=edge)
 
-    def _execute_path(self, start_node_id: str, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        return self.execute(start_node_id, input_data, thread_id=str(uuid.uuid4()))[0]
+    def draw_graph(self, output_file: str | None = None) -> None:
+        import matplotlib.pyplot as plt
 
-    def _combine_results(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        combined = {}
-        for result in results:
-            for key, value in result.items():
-                if key in combined:
-                    reducer = self.memory_manager.short_term_reducers.get(key, default_reducer)
-                    combined[key] = reducer(combined[key], value)
-                else:
-                    combined[key] = value
-        return combined
-
-    def draw_graph(self, output_file: Optional[str] = None) -> None:
         pos = nx.spring_layout(self.graph)
         plt.figure(figsize=(12, 8))
         nx.draw(
