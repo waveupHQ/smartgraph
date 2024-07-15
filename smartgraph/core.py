@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .base import BaseActor, BaseNode, Task
 from .checkpointer import Checkpoint, Checkpointer
 from .exceptions import ConfigurationError, ExecutionError, GraphStructureError
+from .graph_utils import GraphUtils
 from .logging import SmartGraphLogger
 from .memory import MemoryManager, MemoryState
 
@@ -83,12 +84,11 @@ class Edge(BaseModel):
 
 logger = SmartGraphLogger.get_logger()
 
-
 class SmartGraph(BaseModel):
     graph: nx.DiGraph = Field(default_factory=nx.DiGraph)
     memory_manager: MemoryManager = Field(default_factory=MemoryManager)
     checkpointer: Checkpointer = Field(default_factory=Checkpointer)
-    checkpoint_frequency: int = 5  # Save checkpoint every 5 nodes
+    checkpoint_frequency: int = 5
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -167,14 +167,10 @@ class SmartGraph(BaseModel):
         return node_count % self.checkpoint_frequency == 0
 
     def add_node(self, node: BaseNode) -> None:
-        if node.id in self.graph.nodes:
-            raise GraphStructureError(f"Node with id '{node.id}' already exists in the graph")
-        self.graph.add_node(node.id, node=node)
+        GraphUtils.add_node(self.graph, node)
 
-    def add_edge(self, edge: "Edge") -> None:
-        if edge.source_id not in self.graph.nodes or edge.target_id not in self.graph.nodes:
-            raise GraphStructureError(f"Invalid edge: {edge.source_id} -> {edge.target_id}")
-        self.graph.add_edge(edge.source_id, edge.target_id, edge=edge)
+    def add_edge(self, edge: 'Edge') -> None:
+        GraphUtils.add_edge(self.graph, edge)
 
     def draw_graph(self, output_file: str | None = None) -> None:
         import matplotlib.pyplot as plt
