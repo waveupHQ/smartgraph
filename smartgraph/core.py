@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .base import BaseActor, BaseNode, Task
 from .checkpointer import Checkpoint, Checkpointer
+from .condition_evaluator import ConditionEvaluator
 from .exceptions import ConfigurationError, ExecutionError, GraphStructureError
 from .graph_utils import GraphUtils
 from .logging import SmartGraphLogger
@@ -59,20 +60,32 @@ class Edge(BaseModel):
     source_id: str
     target_id: str
     conditions: List[Callable[[Dict[str, Any]], bool]] = Field(default_factory=list)
-    weight: float = DEFAULT_EDGE_WEIGHT
+    weight: float = 1.0
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def is_valid(self, data: Dict[str, Any]) -> bool:
-        return all(condition(data) for condition in self.conditions) if self.conditions else True
+        return ConditionEvaluator.evaluate(self.conditions, data)
 
-    def __hash__(self) -> int:
+    def __hash__(self):
         return hash((self.source_id, self.target_id))
 
-    def __eq__(self, other: object) -> bool:
+    def __eq__(self, other):
         if isinstance(other, Edge):
             return self.source_id == other.source_id and self.target_id == other.target_id
         return False
+
+    @classmethod
+    def with_condition(cls, source_id: str, target_id: str, key: str, value: Any):
+        condition = ConditionEvaluator.create_condition(key, value)
+        return cls(source_id=source_id, target_id=target_id, conditions=[condition])
+
+    @classmethod
+    def with_range_condition(
+        cls, source_id: str, target_id: str, key: str, min_value: float, max_value: float
+    ):
+        condition = ConditionEvaluator.create_range_condition(key, min_value, max_value)
+        return cls(source_id=source_id, target_id=target_id, conditions=[condition])
 
 
 logger = SmartGraphLogger.get_logger()
