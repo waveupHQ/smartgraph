@@ -99,16 +99,31 @@ class SmartGraph(BaseModel):
     graph: nx.DiGraph = Field(default_factory=nx.DiGraph)
     memory_manager: MemoryManager = Field(default_factory=MemoryManager)
     checkpoint_manager: CheckpointManager = Field(default_factory=CheckpointManager)
-    checkpoint_frequency: int = 5
+    checkpoint_frequency: int = 5  # Save checkpoint every 5 nodes
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     async def execute(
         self, start_node_id: str, input_data: Dict[str, Any], thread_id: str
     ) -> Tuple[Dict[str, Any], bool]:
+        """Execute the graph starting from the specified node.
+
+        Args:
+            start_node_id (str): The ID of the starting node.
+            input_data (Dict[str, Any]): Initial input data for the execution.
+            thread_id (str): Unique identifier for this execution thread.
+
+        Returns:
+            Tuple[Dict[str, Any], bool]: A tuple containing the final memory state and a boolean
+            indicating whether execution should exit.
+
+        Raises:
+            GraphStructureError: If the start node is not found in the graph.
+        """
         if start_node_id not in self.graph.nodes:
             raise GraphStructureError(f"Start node '{start_node_id}' not found in the graph")
 
+        # Load the latest checkpoint if available
         latest_checkpoint = await self.checkpoint_manager.get_latest_checkpoint(thread_id)
         if latest_checkpoint:
             current_node_id = latest_checkpoint.next_nodes[0]
@@ -120,19 +135,21 @@ class SmartGraph(BaseModel):
         node_count = 0
         while not should_exit:
             try:
+                # Execute the current node
                 current_node = self.graph.nodes[current_node_id]["node"]
                 node_output = await current_node.execute(input_data)
 
-                # Update the state using reducer functions
+                # Update the state
                 for key, value in node_output.items():
                     await self.memory_manager.update_short_term(key, value)
 
                 # Check for exit condition
                 if node_output.get("response", "").lower() == "exit":
-                    logger.info("Exit command received. Ending conversation.")
+                    logger.info("Exit command received. Ending execution.")
                     should_exit = True
                     break
 
+                # Find valid edges and next nodes
                 next_node_ids = list(self.graph.successors(current_node_id))
                 if not next_node_ids:
                     break
@@ -146,7 +163,7 @@ class SmartGraph(BaseModel):
                 if not valid_edges:
                     break
 
-                # Save checkpoint
+                # Save checkpoint if necessary
                 node_count += 1
                 if node_count % self.checkpoint_frequency == 0:
                     checkpoint = Checkpoint(
@@ -156,7 +173,7 @@ class SmartGraph(BaseModel):
                     )
                     await self.checkpoint_manager.save_checkpoint(thread_id, checkpoint)
 
-                # Choose the next node (simplified for now)
+                # Move to the next node
                 current_node_id = valid_edges[0].target_id
 
                 # Update input_data for the next iteration
