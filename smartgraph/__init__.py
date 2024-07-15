@@ -4,6 +4,7 @@ from .actors import Actor, AIActor, HumanActor
 from .base import BaseActor, BaseNode, Task
 from .core import Edge, Node, SmartGraph
 from .exceptions import (
+    ActorExecutionError,
     ConfigurationError,
     ExecutionError,
     GraphStructureError,
@@ -35,6 +36,7 @@ __all__ = [
     "ValidationError",
     "MemoryError",
     "GraphStructureError",
+    "ActorExecutionError",
     "SmartGraphLogger",
 ]
 

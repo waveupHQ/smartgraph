@@ -1,4 +1,4 @@
-# smartgraph/core.py
+from __future__ import annotations
 
 import logging
 import uuid
@@ -15,6 +15,11 @@ from .exceptions import ConfigurationError, ExecutionError, GraphStructureError
 from .logging import SmartGraphLogger
 from .memory import MemoryManager, MemoryState
 
+# Constants
+DEFAULT_EDGE_WEIGHT = 1.0
+MAX_RESPONSE_LENGTH = 1000  # Maximum length for response storage
+
+# Type aliases
 ReducerFunction: TypeAlias = Callable[[Any, Any], Any]
 
 
@@ -39,14 +44,16 @@ class Node(BaseModel):
         try:
             output = self.actor.perform_task(self.task, input_data, self.state)
         except Exception as e:
-            raise ExecutionError(f"Error executing node {self.id}: {str(e)}", node_id=self.id) from e
+            raise ExecutionError(
+                f"Error executing node {self.id}: {str(e)}", node_id=self.id
+            )  # noqa: B904
 
         if self.post_execute:
             output = self.post_execute(output, self.state)
 
         return output
 
-    def update_state(self, new_state: Dict[str, Any]):
+    def update_state(self, new_state: Dict[str, Any]) -> None:
         self.state.update(new_state)
 
 
@@ -54,17 +61,17 @@ class Edge(BaseModel):
     source_id: str
     target_id: str
     conditions: List[Callable[[Dict[str, Any]], bool]] = Field(default_factory=list)
-    weight: float = 1.0
+    weight: float = DEFAULT_EDGE_WEIGHT
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def is_valid(self, data: Dict[str, Any]) -> bool:
         return all(condition(data) for condition in self.conditions) if self.conditions else True
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash((self.source_id, self.target_id))
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, Edge):
             return self.source_id == other.source_id and self.target_id == other.target_id
         return False
@@ -82,7 +89,7 @@ class SmartGraph(BaseModel):
 
     def execute(
         self, start_node_id: str, input_data: Dict[str, Any], thread_id: str
-    ) -> Dict[str, Any]:
+    ) -> tuple[Dict[str, Any], bool]:
         if start_node_id not in self.graph.nodes:
             raise GraphStructureError(f"Start node '{start_node_id}' not found in the graph")
 
@@ -130,11 +137,8 @@ class SmartGraph(BaseModel):
                 )
                 self.checkpointer.save_checkpoint(thread_id, checkpoint)
 
-                if len(valid_edges) == 1:
-                    current_node_id = valid_edges[0].target_id
-                else:
-                    # For simplicity, we'll just choose the first valid edge in case of multiple valid edges
-                    current_node_id = valid_edges[0].target_id
+                # Choose the next node (simplified for now)
+                current_node_id = valid_edges[0].target_id
 
                 # Update input_data for the next iteration
                 input_data = node_output
@@ -148,25 +152,20 @@ class SmartGraph(BaseModel):
 
         return self.memory_manager.state.dict(), should_exit
 
-    def add_node(self, node: Node):
+    def add_node(self, node: Node) -> None:
         if node.id in self.graph.nodes:
             raise ConfigurationError(f"Node with id '{node.id}' already exists in the graph")
         self.graph.add_node(node.id, node=node)
 
-    def add_edge(self, edge: Edge):
+    def add_edge(self, edge: Edge) -> None:
         if edge.source_id not in self.graph.nodes or edge.target_id not in self.graph.nodes:
-            logger.error(f"Attempted to add invalid edge: {edge.source_id} -> {edge.target_id}")
             raise GraphStructureError(f"Invalid edge: {edge.source_id} -> {edge.target_id}")
         self.graph.add_edge(edge.source_id, edge.target_id, edge=edge)
-        logger.info(f"Added edge: {edge.source_id} -> {edge.target_id}")
 
     def _execute_path(self, start_node_id: str, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        logger.debug(f"Executing path starting from node {start_node_id}")
-        result, _ = self.execute(start_node_id, input_data, thread_id=str(uuid.uuid4()))
-        return result
+        return self.execute(start_node_id, input_data, thread_id=str(uuid.uuid4()))[0]
 
     def _combine_results(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        logger.debug("Combining results from multiple paths")
         combined = {}
         for result in results:
             for key, value in result.items():
@@ -175,11 +174,9 @@ class SmartGraph(BaseModel):
                     combined[key] = reducer(combined[key], value)
                 else:
                     combined[key] = value
-        logger.debug("Results combined successfully")
         return combined
 
-    def draw_graph(self, output_file: Optional[str] = None):
-        logger.info("Drawing graph visualization")
+    def draw_graph(self, output_file: Optional[str] = None) -> None:
         pos = nx.spring_layout(self.graph)
         plt.figure(figsize=(12, 8))
         nx.draw(
@@ -219,7 +216,5 @@ class SmartGraph(BaseModel):
         if output_file:
             plt.savefig(output_file, format="png", dpi=300, bbox_inches="tight")
             plt.close()
-            logger.info(f"Graph visualization saved to {output_file}")
         else:
             plt.show()
-            logger.info("Graph visualization displayed")

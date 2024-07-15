@@ -1,26 +1,30 @@
-# smartgraph/logging.py
+from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Optional
+
+# Constants
+DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+DEFAULT_LOG_LEVEL = logging.INFO
 
 
 class SmartGraphLogger:
-    _instance = None  # Singleton pattern to ensure only one instance of the logger exists.
+    _instance: Optional[SmartGraphLogger] = None
 
-    def __new__(cls):
+    def __new__(cls) -> SmartGraphLogger:
         if cls._instance is None:
             cls._instance = super(SmartGraphLogger, cls).__new__(cls)
             cls._instance._logger = logging.getLogger("SmartGraph")
             cls._instance._configure_logger()
         return cls._instance
 
-    def _configure_logger(self):
-        self._logger.setLevel(logging.DEBUG)
-        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    def _configure_logger(self) -> None:
+        self._logger.setLevel(DEFAULT_LOG_LEVEL)
+        formatter = logging.Formatter(DEFAULT_LOG_FORMAT)
 
         # Console handler
         console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(DEFAULT_LOG_LEVEL)
         console_handler.setFormatter(formatter)
         self._logger.addHandler(console_handler)
 
@@ -30,26 +34,26 @@ class SmartGraphLogger:
         file_handler.setFormatter(formatter)
         self._logger.addHandler(file_handler)
 
-    def debug(self, message: str, *args, **kwargs):
+    def debug(self, message: str, *args: Any, **kwargs: Any) -> None:
         self._logger.debug(message, *args, **kwargs)
 
-    def info(self, message: str, *args, **kwargs):
+    def info(self, message: str, *args: Any, **kwargs: Any) -> None:
         self._logger.info(message, *args, **kwargs)
 
-    def warning(self, message: str, *args, **kwargs):
+    def warning(self, message: str, *args: Any, **kwargs: Any) -> None:
         self._logger.warning(message, *args, **kwargs)
 
-    def error(self, message: str, *args, **kwargs):
+    def error(self, message: str, *args: Any, **kwargs: Any) -> None:
         self._logger.error(message, *args, **kwargs)
 
-    def critical(self, message: str, *args, **kwargs):
+    def critical(self, message: str, *args: Any, **kwargs: Any) -> None:
         self._logger.critical(message, *args, **kwargs)
 
     @classmethod
-    def get_logger(cls):
+    def get_logger(cls) -> SmartGraphLogger:
         return cls()
 
-    def set_level(self, level: str):
+    def set_level(self, level: str) -> None:
         """Set the logging level.
 
         Args:
@@ -60,7 +64,7 @@ class SmartGraphLogger:
             raise ValueError(f"Invalid log level: {level}")
         self._logger.setLevel(numeric_level)
 
-    def add_file_handler(self, filename: str, level: Optional[str] = None):
+    def add_file_handler(self, filename: str, level: Optional[str] = None) -> None:
         """Add a file handler to the logger.
 
         Args:
@@ -73,7 +77,7 @@ class SmartGraphLogger:
             if not isinstance(numeric_level, int):
                 raise ValueError(f"Invalid log level: {level}")
             handler.setLevel(numeric_level)
-        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        formatter = logging.Formatter(DEFAULT_LOG_FORMAT)
         handler.setFormatter(formatter)
         self._logger.addHandler(handler)
 

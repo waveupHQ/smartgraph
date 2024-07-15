@@ -1,7 +1,8 @@
 # examples/manual_test.py
 
 import logging
-from smartgraph import SmartGraph, Node, Edge, HumanActor, AIActor, Task
+
+from smartgraph import AIActor, Edge, HumanActor, Node, SmartGraph, Task
 from smartgraph.logging import SmartGraphLogger
 from smartgraph.memory import MemoryManager
 
@@ -17,7 +18,9 @@ ai_actor = AIActor(name="AI", memory_manager=memory_manager)  # No need to pass 
 
 start_node = Node(id="start", actor=human_actor, task=Task(description="Start conversation"))
 ai_response_node = Node(id="ai_response", actor=ai_actor, task=Task(description="AI response"))
-human_feedback_node = Node(id="human_feedback", actor=human_actor, task=Task(description="Human feedback"))
+human_feedback_node = Node(
+    id="human_feedback", actor=human_actor, task=Task(description="Human feedback")
+)
 
 edge1 = Edge(source_id="start", target_id="ai_response")
 edge2 = Edge(source_id="ai_response", target_id="human_feedback")
