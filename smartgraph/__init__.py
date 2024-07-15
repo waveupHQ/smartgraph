@@ -1,7 +1,8 @@
-# smartgraph/__init__.py  # noqa: D104
+# smartgraph/__init__.py
 
 from .actors import Actor, AIActor, HumanActor
-from .core import Edge, Node, SmartGraph, Task
+from .base import BaseActor, BaseNode, Task
+from .core import Edge, Node, SmartGraph
 from .memory import MemoryManager
 from .reducers import dict_update_reducer, list_append_reducer, max_reducer
 
@@ -10,6 +11,8 @@ __all__ = [
     "Node",
     "Edge",
     "Task",
+    "BaseActor",
+    "BaseNode",
     "Actor",
     "HumanActor",
     "AIActor",

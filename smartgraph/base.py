@@ -21,14 +21,14 @@ class BaseActor:
         return self._log
 
     def perform_task(
-        self, task: Task, input_data: Dict[str, Any], state: Dict[str, Any]
+        self, task: "Task", input_data: Dict[str, Any], state: Dict[str, Any]
     ) -> Dict[str, Any]:
         self.log.debug(f"Actor {self.name} performing task: {task.description}")
         raise NotImplementedError
 
 
 class BaseNode:
-    def __init__(self, id: str, actor: BaseActor, task: Task):
+    def __init__(self, id: str, actor: BaseActor, task: "Task"):
         self.id = id
         self.actor = actor
         self.task = task

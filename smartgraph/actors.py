@@ -10,24 +10,14 @@ from .base import BaseActor, Task
 from .memory import MemoryManager
 
 
-class Actor(BaseModel):
+class Actor(BaseActor, BaseModel):
     name: str
     memory_manager: MemoryManager
-    assistant: Optional[Assistant] = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def perform_task(
-        self, task: Task, input_data: Dict[str, Any], state: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        raise NotImplementedError
 
-
-class HumanActor(Actor, BaseActor):
-    def __init__(self, name: str, **data):
-        super().__init__(name=name, **data)
-        BaseActor.__init__(self, name)
-
+class HumanActor(Actor):
     def perform_task(
         self, task: Task, input_data: Dict[str, Any], state: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -39,13 +29,9 @@ class HumanActor(Actor, BaseActor):
         return {"response": user_input}
 
 
-class AIActor(Actor, BaseActor):
+class AIActor(Actor):
     assistant: Assistant
     tools: Optional[Toolkit] = None
-
-    def __init__(self, name: str, assistant: Assistant, **data):
-        super().__init__(name=name, assistant=assistant, **data)
-        BaseActor.__init__(self, name)
 
     def perform_task(
         self, task: Task, input_data: Dict[str, Any], state: Dict[str, Any]
