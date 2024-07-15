@@ -11,7 +11,8 @@ import networkx as nx
 from pydantic import BaseModel, ConfigDict, Field
 
 from .base import BaseActor, BaseNode, Task
-from .checkpointer import Checkpoint, Checkpointer
+from .checkpoint_manager import Checkpoint, CheckpointManager
+from .checkpointer import Checkpointer
 from .condition_evaluator import ConditionEvaluator
 from .exceptions import ConfigurationError, ExecutionError, GraphStructureError
 from .graph_utils import GraphUtils
@@ -49,7 +50,9 @@ class Node(BaseModel):
             output = await TaskExecutor.execute_node_task(self)
             return output
         except ExecutionError as e:
-            raise ExecutionError(f"Error executing node {self.id}: {str(e)}", node_id=self.id)
+            raise ExecutionError(
+                f"Error executing node {self.id}: {str(e)}", node_id=self.id
+            )  # noqa: B904
 
     async def update_state(self, new_state: Dict[str, Any]) -> None:
         for key, value in new_state.items():
@@ -67,10 +70,10 @@ class Edge(BaseModel):
     def is_valid(self, data: Dict[str, Any]) -> bool:
         return ConditionEvaluator.evaluate(self.conditions, data)
 
-    def __hash__(self):
+    def __hash__(self):  # noqa: D105
         return hash((self.source_id, self.target_id))
 
-    def __eq__(self, other):
+    def __eq__(self, other):  # noqa: D105
         if isinstance(other, Edge):
             return self.source_id == other.source_id and self.target_id == other.target_id
         return False
@@ -81,7 +84,7 @@ class Edge(BaseModel):
         return cls(source_id=source_id, target_id=target_id, conditions=[condition])
 
     @classmethod
-    def with_range_condition(
+    def with_range_condition(  # noqa: PLR0913
         cls, source_id: str, target_id: str, key: str, min_value: float, max_value: float
     ):
         condition = ConditionEvaluator.create_range_condition(key, min_value, max_value)
@@ -94,7 +97,7 @@ logger = SmartGraphLogger.get_logger()
 class SmartGraph(BaseModel):
     graph: nx.DiGraph = Field(default_factory=nx.DiGraph)
     memory_manager: MemoryManager = Field(default_factory=MemoryManager)
-    checkpointer: Checkpointer = Field(default_factory=Checkpointer)
+    checkpoint_manager: CheckpointManager = Field(default_factory=CheckpointManager)
     checkpoint_frequency: int = 5
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -105,7 +108,7 @@ class SmartGraph(BaseModel):
         if start_node_id not in self.graph.nodes:
             raise GraphStructureError(f"Start node '{start_node_id}' not found in the graph")
 
-        latest_checkpoint = self.checkpointer.get_latest_checkpoint(thread_id)
+        latest_checkpoint = await self.checkpoint_manager.get_latest_checkpoint(thread_id)
         if latest_checkpoint:
             current_node_id = latest_checkpoint.next_nodes[0]
             self.memory_manager.state = MemoryState(**latest_checkpoint.state)
@@ -117,7 +120,7 @@ class SmartGraph(BaseModel):
         while not should_exit:
             try:
                 current_node = self.graph.nodes[current_node_id]["node"]
-                node_output = await TaskExecutor.execute_node_task(current_node)
+                node_output = await current_node.execute(input_data)
 
                 # Update the state using reducer functions
                 for key, value in node_output.items():
@@ -142,27 +145,24 @@ class SmartGraph(BaseModel):
                 if not valid_edges:
                     break
 
-                # Save checkpoint (now less frequent)
+                # Save checkpoint
                 node_count += 1
-                if self._should_save_checkpoint(node_count):
+                if node_count % self.checkpoint_frequency == 0:
                     checkpoint = Checkpoint(
                         node_id=current_node_id,
                         state=self.memory_manager.state.dict(),
                         next_nodes=[edge.target_id for edge in valid_edges],
                     )
-                    await self.checkpointer.save_checkpoint(thread_id, checkpoint)
+                    await self.checkpoint_manager.save_checkpoint(thread_id, checkpoint)
 
                 # Choose the next node (simplified for now)
                 current_node_id = valid_edges[0].target_id
 
                 # Update input_data for the next iteration
-                input_data = node_output  # noqa: F841
+                input_data = node_output
 
-            except ExecutionError as e:
-                logger.error(f"Execution error: {str(e)}")
-                break
             except Exception as e:
-                logger.error(f"Unexpected error: {str(e)}")
+                logger.error(f"Error during execution: {str(e)}")
                 break
 
         # Cleanup long-term memory
@@ -180,8 +180,6 @@ class SmartGraph(BaseModel):
         GraphUtils.add_edge(self.graph, edge)
 
     def draw_graph(self, output_file: str | None = None) -> None:
-        import matplotlib.pyplot as plt
-
         pos = nx.spring_layout(self.graph)
         plt.figure(figsize=(12, 8))
         nx.draw(
