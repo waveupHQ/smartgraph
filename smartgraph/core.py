@@ -152,6 +152,8 @@ class SmartGraph(BaseModel):
                 # Find valid edges and next nodes
                 next_node_ids = list(self.graph.successors(current_node_id))
                 if not next_node_ids:
+                    logger.info("No next nodes found. Ending execution.")
+                    should_exit = True
                     break
 
                 valid_edges = [
@@ -161,6 +163,8 @@ class SmartGraph(BaseModel):
                 ]
 
                 if not valid_edges:
+                    logger.info("No valid edges found. Ending execution.")
+                    should_exit = True
                     break
 
                 # Save checkpoint if necessary
@@ -181,6 +185,7 @@ class SmartGraph(BaseModel):
 
             except Exception as e:
                 logger.error(f"Error during execution: {str(e)}")
+                should_exit = True
                 break
 
         # Cleanup long-term memory
