@@ -3,21 +3,15 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, Optional
 
-from phi.assistant import Assistant
-from phi.tools import Toolkit
 from pydantic import BaseModel, ConfigDict, Field
 
 from .base import BaseActor, Task
 from .exceptions import ActorExecutionError
 from .logging import SmartGraphLogger
 from .memory import MemoryManager
+from .assistant_conversation import AssistantConversation
 
 logger = SmartGraphLogger.get_logger()
-
-
-# Constants
-MAX_RESPONSE_LENGTH = 1000  # Maximum length for response storage
-
 
 class Actor(BaseModel, BaseActor):
     name: str
@@ -34,7 +28,6 @@ class Actor(BaseModel, BaseActor):
     ) -> Dict[str, Any]:
         raise NotImplementedError
 
-
 class HumanActor(BaseActor):
     def __init__(self, name: str, memory_manager: MemoryManager):
         super().__init__(name, memory_manager)
@@ -48,26 +41,17 @@ class HumanActor(BaseActor):
         # Use asyncio.to_thread to run input() in a separate thread
         user_input = await asyncio.to_thread(input, "Enter your response: ")
 
-        # Truncate user input if it exceeds the maximum length
-        if len(user_input) > MAX_RESPONSE_LENGTH:
-            self.log.warning(
-                f"User input exceeds maximum length. Truncating to {MAX_RESPONSE_LENGTH} characters."
-            )
-            user_input = user_input[:MAX_RESPONSE_LENGTH]
-
         await self.memory_manager.update_short_term("last_input", user_input)
         await self.memory_manager.update_long_term("conversation_history", user_input)
 
         return {"response": user_input}
 
-
 class AIActor(BaseActor):
     def __init__(
-        self, name: str, memory_manager: MemoryManager, assistant: Optional[Assistant] = None
+        self, name: str, memory_manager: MemoryManager, assistant: Optional[AssistantConversation] = None
     ):
         super().__init__(name, memory_manager)
         self.assistant = assistant
-        self.tools: Optional[Toolkit] = None
 
     async def perform_task(
         self, task: Task, input_data: Dict[str, Any], state: Dict[str, Any]
@@ -78,28 +62,21 @@ class AIActor(BaseActor):
 
         context = await self._build_context(input_data, state)
 
-        prompt = (
-            task.prompt.format(**context)
-            if task.prompt
-            else (f"Task: {task.description}\nContext: {context}\nPlease provide a response.")
+        prompt = task.prompt.format(input=context["input"]) if task.prompt else (
+            f"Task: {task.description}\nContext: {context}\nPlease provide a response."
         )
 
         try:
-            # Simulate AI response for now
-            await asyncio.sleep(1)  # Simulate some processing time
-            response = f"AI response to: {prompt}"
+            response = await self.assistant.run(prompt)
 
-            if len(response) > MAX_RESPONSE_LENGTH:
-                self.log.warning(
-                    f"AI response exceeds maximum length. Truncating to {MAX_RESPONSE_LENGTH} characters."
-                )
-                response = response[:MAX_RESPONSE_LENGTH]
+            if response is None:
+                self.log.warning("Received None response from assistant")
+                return {"response": "I'm sorry, but I couldn't generate a response at this time."}
 
             self.log.info(f"AI response: {response}")
 
             await self.memory_manager.update_short_term("last_response", response)
             await self.memory_manager.update_long_term("conversation_history", response)
-            await self.memory_manager.update_long_term("max_response_length", len(response))
 
             return {"response": response}
         except Exception as e:
@@ -113,7 +90,7 @@ class AIActor(BaseActor):
         short_term = await self.memory_manager.get_short_term("context")
         long_term = await self.memory_manager.get_long_term("conversation_history")
         return {
-            "input": input_data,
+            "input": input_data if isinstance(input_data, str) else str(input_data),
             "state": state,
             "short_term_memory": short_term,
             "long_term_memory": long_term,

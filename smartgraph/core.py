@@ -181,7 +181,7 @@ class SmartGraph(BaseModel):
                 current_node_id = valid_edges[0].target_id
 
                 # Update input_data for the next iteration
-                input_data = node_output
+                input_data = node_output.get("response", "")  # Use the response as the next input
 
             except Exception as e:
                 logger.error(f"Error during execution: {str(e)}")
