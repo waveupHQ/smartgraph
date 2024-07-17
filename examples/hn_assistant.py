@@ -1,4 +1,4 @@
-#/examples/hn_assistant.py
+# /examples/hn_assistant.py
 import asyncio
 import json
 import os
@@ -10,6 +10,7 @@ from smartgraph import AIActor, Edge, HumanActor, MemoryManager, Node, SmartGrap
 from smartgraph.assistant_conversation import AssistantConversation
 from smartgraph.logging import SmartGraphLogger
 
+
 def get_top_hackernews_stories(num_stories: int = 10) -> str:
     """Use this function to get top stories from Hacker News.
 
@@ -20,13 +21,13 @@ def get_top_hackernews_stories(num_stories: int = 10) -> str:
         str: JSON string of top stories.
     """
     # Fetch top story IDs
-    response = httpx.get('https://hacker-news.firebaseio.com/v0/topstories.json')
+    response = httpx.get("https://hacker-news.firebaseio.com/v0/topstories.json")
     story_ids = response.json()
 
     # Fetch story details
     stories = []
     for story_id in story_ids[:num_stories]:
-        story_response = httpx.get(f'https://hacker-news.firebaseio.com/v0/item/{story_id}.json')
+        story_response = httpx.get(f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json")
         story = story_response.json()
         if "text" in story:
             story.pop("text", None)
@@ -56,12 +57,12 @@ get_top_stories_schema = {
                 "num_stories": {
                     "type": "integer",
                     "description": "Number of stories to return",
-                    "default": 10
+                    "default": 10,
                 }
             },
-            "required": []
-        }
-    }
+            "required": [],
+        },
+    },
 }
 
 # Initialize assistant
@@ -70,7 +71,7 @@ assistant = AssistantConversation(
     tools=[get_top_stories_schema],
     tool_choice="auto",
     model=model,
-    api_key=api_key
+    api_key=api_key,
 )
 
 # Add the search function to the assistant
