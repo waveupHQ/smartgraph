@@ -5,13 +5,14 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .assistant_conversation import AssistantConversation
 from .base import BaseActor, Task
 from .exceptions import ActorExecutionError
 from .logging import SmartGraphLogger
 from .memory import MemoryManager
-from .assistant_conversation import AssistantConversation
 
 logger = SmartGraphLogger.get_logger()
+
 
 class Actor(BaseModel, BaseActor):
     name: str
@@ -27,6 +28,7 @@ class Actor(BaseModel, BaseActor):
         self, task: Task, input_data: Dict[str, Any], state: Dict[str, Any]
     ) -> Dict[str, Any]:
         raise NotImplementedError
+
 
 class HumanActor(BaseActor):
     def __init__(self, name: str, memory_manager: MemoryManager):
@@ -46,9 +48,13 @@ class HumanActor(BaseActor):
 
         return {"response": user_input}
 
+
 class AIActor(BaseActor):
     def __init__(
-        self, name: str, memory_manager: MemoryManager, assistant: Optional[AssistantConversation] = None
+        self,
+        name: str,
+        memory_manager: MemoryManager,
+        assistant: Optional[AssistantConversation] = None,
     ):
         super().__init__(name, memory_manager)
         self.assistant = assistant
@@ -62,8 +68,10 @@ class AIActor(BaseActor):
 
         context = await self._build_context(input_data, state)
 
-        prompt = task.prompt.format(input=context["input"]) if task.prompt else (
-            f"Task: {task.description}\nContext: {context}\nPlease provide a response."
+        prompt = (
+            task.prompt.format(input=context["input"])
+            if task.prompt
+            else (f"Task: {task.description}\nContext: {context}\nPlease provide a response.")
         )
 
         try:
@@ -82,7 +90,7 @@ class AIActor(BaseActor):
         except Exception as e:
             error_message = f"Error during AI task execution: {str(e)}"
             self.log.error(error_message)
-            raise ActorExecutionError(error_message, actor_name=self.name)
+            raise ActorExecutionError(error_message, actor_name=self.name)  # noqa: B904
 
     async def _build_context(
         self, input_data: Dict[str, Any], state: Dict[str, Any]

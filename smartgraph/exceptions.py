@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-class SmartGraphException(Exception):
+class SmartGraphException(Exception):  # noqa: N818
     """Base exception class for all SmartGraph-related exceptions."""
 
     def __init__(self, message: str):

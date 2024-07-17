@@ -27,5 +27,4 @@ async def test_smartgraph_execution_termination():
     final_state, should_exit = await graph.execute("start", {}, "test_thread")
 
     # Assert that the execution terminates
-    assert should_exit == True
-
+    assert should_exit is True
