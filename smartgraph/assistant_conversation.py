@@ -70,16 +70,21 @@ class AssistantConversation:
                     function_name = tool_call["function"]["name"]
                     function_to_call = self.available_functions.get(function_name)
                     if function_to_call:
-                        function_args = json.loads(tool_call["function"]["arguments"])
-                        function_response = function_to_call(**function_args)
-                        self.messages.append(
-                            {
-                                "tool_call_id": tool_call["id"],
-                                "role": "tool",
-                                "name": function_name,
-                                "content": function_response,
-                            }
-                        )
+                        try:
+                            function_args = json.loads(tool_call["function"]["arguments"])
+                            function_response = function_to_call(**function_args)
+                            self.messages.append(
+                                {
+                                    "tool_call_id": tool_call["id"],
+                                    "role": "tool",
+                                    "name": function_name,
+                                    "content": function_response,
+                                }
+                            )
+                        except json.JSONDecodeError as e:
+                            logger.error(f"JSON Decode Error in tool call: {str(e)}")
+                            logger.error(f"Tool call arguments: {tool_call['function']['arguments']}")
+                            raise
 
                 trimmed_messages = trim_messages(self.messages, self.model, max_tokens=MAX_TOKENS)
 
@@ -100,7 +105,9 @@ class AssistantConversation:
             return response_message["content"]
 
         except Exception as e:
+            import traceback
             logger.error(f"Error during LLM interaction: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return f"I'm sorry, but an error occurred: {str(e)}"
 
     def reset_conversation(self):

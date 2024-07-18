@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import traceback
 
 from dotenv import load_dotenv
 
@@ -119,6 +120,8 @@ graph.add_edge(Edge(source_id="search", target_id="present_results"))
 graph.add_edge(Edge(source_id="present_results", target_id="get_query"))
 
 
+
+
 # Execute the graph
 async def run_search_assistant():
     while True:
@@ -126,15 +129,29 @@ async def run_search_assistant():
             result, should_exit = await graph.execute("get_query", {}, "search_session")
             if should_exit:
                 break
-            logger.info("\nSearch Results:")
-            logger.info(result["short_term"].get("response", "No results found."))
-            logger.info("\n---")
+            if result and "short_term" in result:
+                logger.info("\nSearch Results:")
+                logger.info(result["short_term"].get("response", "No results found."))
+                logger.info("\n---")
+            else:
+                logger.warning("No valid result returned from graph execution.")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON Decode Error: {str(e)}")
+            logger.error(f"Error location: {e.pos}")
+            logger.error(f"Error message: {e.msg}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            print("An error occurred while processing the response. Please try again.")
         except Exception as e:
             logger.error(f"Error during search assistant execution: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             print("An error occurred. Please try again.")
         finally:
             assistant.reset_conversation()  # Reset conversation after each interaction
-
+        
+        # Ask user if they want to continue
+        user_input = input("Do you want to continue? (yes/no): ").lower()
+        if user_input != 'yes':
+            break
 
 # Run the search assistant
 if __name__ == "__main__":

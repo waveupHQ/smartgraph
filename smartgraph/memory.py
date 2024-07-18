@@ -3,6 +3,7 @@ from collections import deque
 from time import time
 from typing import Any, Dict
 
+import jsonpickle
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
@@ -33,6 +34,9 @@ class MemoryState(BaseModel):
         default_factory=lambda: ShortTermMemory(last_input="", last_response="", context={})
     )
     long_term: LongTermMemory = Field(default_factory=LongTermMemory)
+
+    def dict(self, *args, **kwargs):
+        return jsonpickle.encode(self)
 
 
 class MemoryManager:
