@@ -22,7 +22,7 @@ async def main():
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable is not set")
 
-    # Initialize MemoryManager (won't be used for long-term storage in this simple version)
+    # Initialize MemoryManager
     memory_manager = MemoryManager()
 
     # Initialize AssistantConversation

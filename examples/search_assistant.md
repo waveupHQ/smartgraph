@@ -76,106 +76,241 @@ After each cycle, the user is asked if they want to continue. The conversation s
 
 This implementation allows for a flexible, stateful conversation flow with web search capabilities, combining the strengths of large language models with real-time internet data.
 
-Certainly! Let's take a closer look at the MemoryManager and how it handles the state of the conversation. The MemoryManager is responsible for maintaining both short-term and long-term memory for the conversation.
+Certainly! Let's take a closer look at the MemoryManager and how it handles the state of the conversation and long-term memory. I'll use a Mermaid diagram to illustrate the structure and flow of information.
 
-Here's a breakdown of the MemoryManager's structure and functionality:
+First, let's review the key components of the MemoryManager:
+
+1. Short-term memory: Stores recent inputs, responses, and context.
+2. Long-term memory: Stores facts and user preferences.
+3. Methods for updating and retrieving information from both short-term and long-term memory.
+4. Persistence of long-term memory to a file.
+
+Now, let's visualize this with a Mermaid diagram:
 
 ```mermaid
 classDiagram
     class MemoryManager {
-        -state: MemoryState
-        -lock: asyncio.Lock
-        -short_term_manager: StateManager
-        -long_term_manager: StateManager
-        +update_short_term(key: str, value: Any)
-        +update_long_term(key: str, value: Any)
-        +get_short_term(key: str): Any
-        +get_long_term(key: str): Any
-        +cleanup_long_term_memory()
+        - MemoryState state
+        - String memory_file
+        + update_short_term(key, value)
+        + update_long_term(key, value)
+        + get_short_term(key)
+        + get_long_term(key)
+        - _save_long_term_memory()
+        + load_long_term_memory()
     }
+
     class MemoryState {
-        +short_term: ShortTermMemory
-        +long_term: LongTermMemory
+        + ShortTermMemory short_term
+        + LongTermMemory long_term
     }
+
     class ShortTermMemory {
-        +last_input: str
-        +last_response: str
-        +context: Dict[str, Any]
+        + String last_input
+        + String last_response
+        + Dict context
     }
+
     class LongTermMemory {
-        +conversation_history: deque
-        +max_response_length: int
-        +user_preferences: Dict[str, Any]
-        +last_accessed: Dict[str, float]
+        + List facts
+        + Dict user_preferences
     }
-    MemoryManager o-- MemoryState
-    MemoryState o-- ShortTermMemory
-    MemoryState o-- LongTermMemory
+
+    MemoryManager "1" -- "1" MemoryState
+    MemoryState "1" -- "1" ShortTermMemory
+    MemoryState "1" -- "1" LongTermMemory
+
+    Actor ..> MemoryManager : uses
+    MemoryManager ..> MemoryFile : persists long-term memory
+
+    note for MemoryManager "Manages both short-term and long-term memory"
+    note for ShortTermMemory "Volatile, reset after each conversation"
+    note for LongTermMemory "Persistent across conversations"
 
 ```
 
-The state in the MemoryManager consists of two main components:
+```mermaid
+sequenceDiagram
+    actor User
+    participant "HumanActor" as HA
+    participant "AIActor" as AIA
+    participant "MemoryManager" as MM
 
-1. Short-Term Memory (ShortTermMemory):
+    User ->> HA : Input
+    HA ->> MM : update_short_term(last_input)
+    AIA ->> MM : get_short_term & get_long_term
+    AIA ->> MM : update_short_term(last_response)
+    AIA ->> MM : update_long_term(facts)
+    MM ->> MemoryFile : Save long-term memory
+```
 
-   - last_input: Stores the most recent user input.
-   - last_response: Stores the most recent AI response.
-   - context: A dictionary for storing temporary, context-specific information.
+This diagram illustrates the structure of the MemoryManager and how it interacts with the conversation flow. Here's a breakdown of the key points:
 
-2. Long-Term Memory (LongTermMemory):
-   - conversation_history: A deque (double-ended queue) that stores the entire conversation history, limited to a maximum number of entries (MAX_CONVERSATION_HISTORY).
-   - max_response_length: Tracks the maximum length of AI responses.
-   - user_preferences: Stores user-specific preferences or settings.
-   - last_accessed: Keeps track of when each piece of long-term memory was last accessed.
+1. Structure:
 
-The MemoryManager provides methods to update and retrieve both short-term and long-term memory:
+   - MemoryManager contains a MemoryState, which in turn contains ShortTermMemory and LongTermMemory.
+   - ShortTermMemory stores the last input, last response, and current context.
+   - LongTermMemory stores facts and user preferences.
 
-1. update_short_term(key: str, value: Any):
+2. Data Flow:
 
-   - Updates a specific key in the short-term memory.
-   - This could be used to update the last input, last response, or add context.
+   - User input is processed by the HumanActor and stored in short-term memory.
+   - AIActor retrieves both short-term and long-term memory to generate responses.
+   - AIActor updates short-term memory with its response and may update long-term memory with new facts.
+   - Long-term memory is periodically saved to a file (memory.md) for persistence.
 
-2. update_long_term(key: str, value: Any):
+3. Memory Characteristics:
 
-   - Updates a specific key in the long-term memory.
-   - If the key is "conversation_history", it appends the value to the conversation history deque.
-   - For other keys, it updates the corresponding value in long-term memory.
+   - Short-term memory is volatile and typically reset after each conversation.
+   - Long-term memory persists across conversations, allowing for accumulated knowledge and user preferences.
 
-3. get_short_term(key: str) and get_long_term(key: str):
+4. Interaction with Actors:
 
-   - Retrieve values from short-term and long-term memory, respectively.
+   - Both HumanActor and AIActor interact with the MemoryManager to read and write memory states.
+   - This interaction allows for maintaining context within a conversation and across multiple conversations.
 
-4. cleanup_long_term_memory():
-   - Removes long-term memory items that haven't been accessed for a certain period (LONG_TERM_MEMORY_TTL).
+5. Persistence:
+   - The `_save_long_term_memory()` method saves long-term memory to a file, ensuring persistence.
+   - The `load_long_term_memory()` method loads previously saved long-term memory at the start of a new session.
 
-The state is maintained throughout the conversation and is used to provide context for the AI's responses. Here's how it's typically used in the search assistant:
+This design allows for flexible handling of conversation state:
 
-1. When a user inputs a query, it's stored in short-term memory (last_input).
-2. The AI's response is stored in short-term memory (last_response) and added to the conversation history in long-term memory.
-3. Any relevant context from the search results or AI processing can be stored in the context dictionary of short-term memory.
-4. User preferences or persistent information can be stored in long-term memory.
+- Short-term memory provides immediate context within a single conversation.
+- Long-term memory allows the system to remember important facts and user preferences across multiple conversations.
+- The separation of short-term and long-term memory allows for easy management of what information should be persistent vs. transient.
+
+By making the MemoryManager optional in the Actors, as we did in the previous update, we allow for both stateful conversations (using the full capabilities of the MemoryManager) and stateless conversations (bypassing the MemoryManager entirely) within the same system.
+
+
+You're right to bring up the context for conversations with LLMs. This is an important aspect that we should incorporate into our MemoryManager and conversation flow. Let's explore how we can enhance our system to better handle context for LLM conversations.
+
+
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant SmartGraph
+    participant HumanActor
     participant AIActor
     participant MemoryManager
-    participant AssistantConversation
+    participant LLM as LLM (AssistantConversation)
 
-    User->>SmartGraph: Input query
-    SmartGraph->>MemoryManager: update_short_term(last_input)
-    SmartGraph->>AIActor: Execute search node
-    AIActor->>MemoryManager: get_short_term(last_input)
-    MemoryManager-->>AIActor: User's input
-    AIActor->>AssistantConversation: Run search task
-    AssistantConversation-->>AIActor: Search results
-    AIActor->>MemoryManager: update_short_term(last_response)
-    AIActor->>MemoryManager: update_long_term(conversation_history)
-    SmartGraph->>MemoryManager: get_short_term(last_response)
-    MemoryManager-->>SmartGraph: AI's response
-    SmartGraph->>User: Display results
+    Note over MemoryManager: Stores conversation history, facts, and preferences
+
+    User->>HumanActor: Input query
+    HumanActor->>MemoryManager: Update short-term (last input)
+    AIActor->>MemoryManager: Request context
+    MemoryManager-->>AIActor: Return context (conversation history, facts, preferences)
+    AIActor->>AIActor: Build prompt with context
+    AIActor->>LLM: Send prompt with context
+    LLM-->>AIActor: Generate response
+    AIActor->>MemoryManager: Update short-term (last response)
+    AIActor->>MemoryManager: Update long-term (new facts)
+    AIActor->>User: Deliver response
+
+    Note over MemoryManager: Context building process
+    rect rgb(200, 220, 240)
+        MemoryManager->>MemoryManager: 1. Retrieve recent conversation history
+        MemoryManager->>MemoryManager: 2. Add relevant long-term facts
+        MemoryManager->>MemoryManager: 3. Include user preferences
+        MemoryManager->>MemoryManager: 4. Trim context to fit token limit
+    end
 
 ```
 
-This state management allows the search assistant to maintain context across multiple turns of conversation, remember user preferences, and provide more coherent and contextually relevant responses. The separation of short-term and long-term memory allows for efficient access to recent information while also maintaining a persistent conversation history.
+Now, let's discuss how we can enhance our MemoryManager to better handle context for LLM conversations:
+
+1. Conversation History:
+   - Keep a list of recent messages (both user inputs and AI responses) in the short-term memory.
+   - Implement a method to retrieve the recent conversation history.
+
+2. Context Building:
+   - Create a new method in MemoryManager called `build_llm_context()` that combines:
+     a. Recent conversation history
+     b. Relevant long-term facts
+     c. User preferences
+   - This method should also handle trimming the context to fit within the LLM's token limit.
+
+3. Relevance Scoring:
+   - Implement a simple relevance scoring system for long-term facts.
+   - When building context, include only the most relevant facts based on the current conversation.
+
+4. Dynamic Context Management:
+   - Adjust the amount of context provided based on the complexity of the conversation.
+   - For simple queries, less context might be needed, while for more complex conversations, more context could be beneficial.
+
+Here's a pseudo-code example of how we might implement these enhancements in our MemoryManager:
+
+
+
+```python
+import asyncio
+from typing import List, Dict, Any
+
+class MemoryManager:
+    # ... existing code ...
+
+    async def build_llm_context(self, current_query: str, max_tokens: int = 2000) -> str:
+        context_parts = []
+
+        # 1. Add recent conversation history
+        history = await self.get_short_term("conversation_history")
+        context_parts.append("Recent conversation:")
+        context_parts.extend(history[-5:])  # Last 5 exchanges
+
+        # 2. Add relevant long-term facts
+        facts = await self.get_long_term("facts")
+        relevant_facts = self._get_relevant_facts(current_query, facts)
+        if relevant_facts:
+            context_parts.append("Relevant information:")
+            context_parts.extend(relevant_facts)
+
+        # 3. Add user preferences
+        preferences = await self.get_long_term("user_preferences")
+        if preferences:
+            context_parts.append("User preferences:")
+            context_parts.extend([f"{k}: {v}" for k, v in preferences.items()])
+
+        # 4. Trim context to fit token limit
+        context = "\n".join(context_parts)
+        return self._trim_to_token_limit(context, max_tokens)
+
+    def _get_relevant_facts(self, query: str, facts: List[str]) -> List[str]:
+        # Simple relevance scoring based on word overlap
+        query_words = set(query.lower().split())
+        return [fact for fact in facts if len(set(fact.lower().split()) & query_words) > 0]
+
+    def _trim_to_token_limit(self, text: str, max_tokens: int) -> str:
+        # Simple trimming strategy: keep as many full sentences as possible
+        tokens = text.split()
+        if len(tokens) <= max_tokens:
+            return text
+
+        trimmed_tokens = tokens[:max_tokens]
+        last_period = ' '.join(trimmed_tokens).rfind('.')
+        return ' '.join(trimmed_tokens[:last_period + 1])
+
+    async def update_conversation_history(self, message: str, is_user: bool = True):
+        history = await self.get_short_term("conversation_history")
+        prefix = "User: " if is_user else "AI: "
+        history.append(f"{prefix}{message}")
+        await self.update_short_term("conversation_history", history[-10:])  # Keep last 10 messages
+
+```
+
+With these enhancements:
+
+1. The `build_llm_context()` method creates a rich context for each LLM interaction, combining recent history, relevant facts, and user preferences.
+
+2. The `_get_relevant_facts()` method implements a simple relevance scoring system based on word overlap. This could be enhanced with more sophisticated NLP techniques in the future.
+
+3. The `_trim_to_token_limit()` method ensures that the context fits within the LLM's token limit while trying to maintain coherent sentences.
+
+4. The `update_conversation_history()` method keeps track of the ongoing conversation, which is used in building the context.
+
+To integrate this into our existing system:
+
+1. Update the AIActor to use this new context-building method before interacting with the LLM.
+2. Modify the conversation flow to update the conversation history after each exchange.
+3. Adjust the LLM prompts to effectively use this richer context.
+
+By implementing these changes, we create a more context-aware system that can provide the LLM with relevant information from both short-term and long-term memory. This should result in more coherent and contextually appropriate responses from the AI, enhancing the overall quality of the conversation.

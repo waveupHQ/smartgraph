@@ -41,13 +41,16 @@ class AssistantConversation:
     def add_function(self, function_name: str, function):
         self.available_functions[function_name] = function
 
-    async def run(self, prompt: str) -> str:
+    async def run(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
+        if context:
+            context_message = {"role": "system", "content": self._format_context(context)}
+            self.messages.append(context_message)
+
         self.messages.append({"role": "user", "content": prompt})
 
         try:
             trimmed_messages = trim_messages(self.messages, self.model, max_tokens=MAX_TOKENS)
 
-            # Prepare the completion parameters
             completion_params = {
                 "model": self.model,
                 "messages": trimmed_messages,
@@ -59,7 +62,6 @@ class AssistantConversation:
                 "presence_penalty": self.presence_penalty,
             }
 
-            # Only include tools and tool_choice if tools are defined
             if self.tools:
                 completion_params["tools"] = self.tools
                 completion_params["tool_choice"] = self.tool_choice
@@ -111,3 +113,16 @@ class AssistantConversation:
 
     def reset_conversation(self):
         self.messages = []
+
+    def _format_context(self, context: Dict[str, Any]) -> str:
+        formatted_context = "Context:\n"
+        for key, value in context.items():
+            formatted_context += f"{key.capitalize()}:\n"
+            if isinstance(value, list):
+                formatted_context += "\n".join(f"- {item}" for item in value)
+            elif isinstance(value, dict):
+                formatted_context += "\n".join(f"- {k}: {v}" for k, v in value.items())
+            else:
+                formatted_context += str(value)
+            formatted_context += "\n\n"
+        return formatted_context.strip()

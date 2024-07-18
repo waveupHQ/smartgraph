@@ -8,6 +8,7 @@ class ShortTermMemory:
         self.last_input: str = ""
         self.last_response: str = ""
         self.context: Dict[str, Any] = {}
+        self.conversation_history: List[str] = []
 
 class LongTermMemory:
     def __init__(self):
@@ -24,7 +25,8 @@ class MemoryState:
             "short_term": {
                 "last_input": self.short_term.last_input,
                 "last_response": self.short_term.last_response,
-                "context": self.short_term.context
+                "context": self.short_term.context,
+                "conversation_history": self.short_term.conversation_history
             },
             "long_term": {
                 "facts": self.long_term.facts,
@@ -38,6 +40,7 @@ class MemoryState:
         state.short_term.last_input = data["short_term"]["last_input"]
         state.short_term.last_response = data["short_term"]["last_response"]
         state.short_term.context = data["short_term"]["context"]
+        state.short_term.conversation_history = data["short_term"]["conversation_history"]
         state.long_term.facts = data["long_term"]["facts"]
         state.long_term.user_preferences = data["long_term"]["user_preferences"]
         return state
@@ -67,6 +70,17 @@ class MemoryManager:
     async def get_long_term(self, key: str) -> Any:
         async with self.lock:
             return getattr(self.state.long_term, key)
+
+    async def update_conversation_history(self, message: str, is_user: bool = True):
+        async with self.lock:
+            prefix = "User: " if is_user else "AI: "
+            self.state.short_term.conversation_history.append(f"{prefix}{message}")
+            # Keep only the last 10 messages
+            self.state.short_term.conversation_history = self.state.short_term.conversation_history[-10:]
+
+    async def get_conversation_history(self) -> List[str]:
+        async with self.lock:
+            return self.state.short_term.conversation_history
 
     async def _save_long_term_memory(self):
         async with aiofiles.open(self.memory_file, "w") as f:

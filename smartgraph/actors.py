@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from .assistant_conversation import AssistantConversation
 from .base import BaseActor, Task
@@ -12,7 +12,6 @@ from .logging import SmartGraphLogger
 from .memory import MemoryManager
 
 logger = SmartGraphLogger.get_logger()
-
 
 class Actor(BaseModel, BaseActor):
     name: str
@@ -29,7 +28,6 @@ class Actor(BaseModel, BaseActor):
     ) -> Dict[str, Any]:
         raise NotImplementedError
 
-
 class HumanActor(BaseActor):
     def __init__(self, name: str, memory_manager: Optional[MemoryManager] = None):
         super().__init__(name, memory_manager)
@@ -40,13 +38,12 @@ class HumanActor(BaseActor):
         self.log.info(f"Task for {self.name}: {task.description}")
         self.log.debug(f"Input data: {input_data}")
 
-        # Use asyncio.to_thread to run input() in a separate thread
         user_input = await asyncio.to_thread(input, "Enter your response: ")
 
         if self.memory_manager:
             await self.memory_manager.update_short_term("last_input", user_input)
+            await self.memory_manager.update_conversation_history(user_input, is_user=True)
             
-            # Check if the user wants to update preferences
             if user_input.lower().startswith("set preference:"):
                 try:
                     _, pref = user_input.split(":", 1)
@@ -57,14 +54,7 @@ class HumanActor(BaseActor):
                 except ValueError:
                     self.log.warning("Invalid preference format. Use 'set preference:key:value'")
 
-            # Optionally access long-term memory
-            facts = await self.memory_manager.get_long_term("facts")
-            user_preferences = await self.memory_manager.get_long_term("user_preferences")
-            self.log.debug(f"Current facts: {facts}")
-            self.log.debug(f"Current user preferences: {user_preferences}")
-
         return {"response": user_input}
-
 
 class AIActor(BaseActor):
     def __init__(
@@ -86,13 +76,13 @@ class AIActor(BaseActor):
         context = await self._build_context(input_data, state)
 
         prompt = (
-            task.prompt.format(input=context["input"])
+            task.prompt.format(input=input_data.get("response", ""))
             if task.prompt
-            else (f"Task: {task.description}\nContext: {context}\nPlease provide a response.")
+            else f"Task: {task.description}\nPlease provide a response."
         )
 
         try:
-            response = await self.assistant.run(prompt)
+            response = await self.assistant.run(prompt, context)
 
             if response is None:
                 self.log.warning("Received None response from assistant")
@@ -102,8 +92,8 @@ class AIActor(BaseActor):
 
             if self.memory_manager:
                 await self.memory_manager.update_short_term("last_response", response)
+                await self.memory_manager.update_conversation_history(response, is_user=False)
 
-                # Extract and store important facts
                 facts = self._extract_facts(response)
                 for fact in facts:
                     await self.memory_manager.update_long_term("facts", fact)
@@ -113,31 +103,24 @@ class AIActor(BaseActor):
         except Exception as e:
             error_message = f"Error during AI task execution: {str(e)}"
             self.log.error(error_message)
-            raise ActorExecutionError(error_message, actor_name=self.name)  # noqa: B904
+            raise ActorExecutionError(error_message, actor_name=self.name)
 
     async def _build_context(
         self, input_data: Dict[str, Any], state: Dict[str, Any]
     ) -> Dict[str, Any]:
         context = {
-            "input": input_data if isinstance(input_data, str) else str(input_data),
+            "current_input": input_data.get("response", ""),
             "state": state,
         }
 
         if self.memory_manager:
-            short_term = await self.memory_manager.get_short_term("context")
-            facts = await self.memory_manager.get_long_term("facts")
-            user_preferences = await self.memory_manager.get_long_term("user_preferences")
-            context.update({
-                "short_term_memory": short_term,
-                "long_term_facts": facts,
-                "user_preferences": user_preferences,
-            })
+            context["conversation_history"] = await self.memory_manager.get_conversation_history()
+            context["facts"] = await self.memory_manager.get_long_term("facts")
+            context["user_preferences"] = await self.memory_manager.get_long_term("user_preferences")
 
         return context
 
     def _extract_facts(self, response: str) -> List[str]:
-        # This is a simple implementation. You might want to use more sophisticated NLP techniques
-        # or integrate with your AI model to extract important facts.
         sentences = response.split('.')
         facts = [s.strip() for s in sentences if len(s.split()) > 5 and not s.strip().endswith('?')]
-        return facts[:3]  # Limit to 3 facts per response to avoid overwhelming the memory
+        return facts[:3]  # Limit to 3 facts per response
