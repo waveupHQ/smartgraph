@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -44,7 +44,23 @@ class HumanActor(BaseActor):
         user_input = await asyncio.to_thread(input, "Enter your response: ")
 
         await self.memory_manager.update_short_term("last_input", user_input)
-        await self.memory_manager.update_long_term("conversation_history", user_input)
+        
+        # Check if the user wants to update preferences
+        if user_input.lower().startswith("set preference:"):
+            try:
+                _, pref = user_input.split(":", 1)
+                key, value = pref.strip().split(":", 1)
+                user_preference = {key.strip(): value.strip()}
+                await self.memory_manager.update_long_term("user_preferences", user_preference)
+                self.log.info(f"Updated user preference: {user_preference}")
+            except ValueError:
+                self.log.warning("Invalid preference format. Use 'set preference:key:value'")
+
+        # Optionally access long-term memory
+        facts = await self.memory_manager.get_long_term("facts")
+        user_preferences = await self.memory_manager.get_long_term("user_preferences")
+        self.log.debug(f"Current facts: {facts}")
+        self.log.debug(f"Current user preferences: {user_preferences}")
 
         return {"response": user_input}
 
@@ -84,7 +100,12 @@ class AIActor(BaseActor):
             self.log.info(f"AI response: {response}")
 
             await self.memory_manager.update_short_term("last_response", response)
-            await self.memory_manager.update_long_term("conversation_history", response)
+
+            # Extract and store important facts
+            facts = self._extract_facts(response)
+            for fact in facts:
+                await self.memory_manager.update_long_term("facts", fact)
+                self.log.info(f"Added new fact to long-term memory: {fact}")
 
             return {"response": response}
         except Exception as e:
@@ -96,10 +117,19 @@ class AIActor(BaseActor):
         self, input_data: Dict[str, Any], state: Dict[str, Any]
     ) -> Dict[str, Any]:
         short_term = await self.memory_manager.get_short_term("context")
-        long_term = await self.memory_manager.get_long_term("conversation_history")
+        facts = await self.memory_manager.get_long_term("facts")
+        user_preferences = await self.memory_manager.get_long_term("user_preferences")
         return {
             "input": input_data if isinstance(input_data, str) else str(input_data),
             "state": state,
             "short_term_memory": short_term,
-            "long_term_memory": long_term,
+            "long_term_facts": facts,
+            "user_preferences": user_preferences,
         }
+
+    def _extract_facts(self, response: str) -> List[str]:
+        # This is a simple implementation. You might want to use more sophisticated NLP techniques
+        # or integrate with your AI model to extract important facts.
+        sentences = response.split('.')
+        facts = [s.strip() for s in sentences if len(s.split()) > 5 and not s.strip().endswith('?')]
+        return facts[:3]  # Limit to 3 facts per response to avoid overwhelming the memory

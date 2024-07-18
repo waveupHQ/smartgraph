@@ -47,18 +47,24 @@ class AssistantConversation:
         try:
             trimmed_messages = trim_messages(self.messages, self.model, max_tokens=MAX_TOKENS)
 
-            response = litellm.completion(
-                model=self.model,
-                messages=trimmed_messages,
-                tools=self.tools,
-                tool_choice=self.tool_choice,
-                api_key=self.api_key,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                top_p=self.top_p,
-                frequency_penalty=self.frequency_penalty,
-                presence_penalty=self.presence_penalty,
-            )
+            # Prepare the completion parameters
+            completion_params = {
+                "model": self.model,
+                "messages": trimmed_messages,
+                "api_key": self.api_key,
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+                "top_p": self.top_p,
+                "frequency_penalty": self.frequency_penalty,
+                "presence_penalty": self.presence_penalty,
+            }
+
+            # Only include tools and tool_choice if tools are defined
+            if self.tools:
+                completion_params["tools"] = self.tools
+                completion_params["tool_choice"] = self.tool_choice
+
+            response = litellm.completion(**completion_params)
 
             response_message = response.choices[0].message
             self.messages.append(response_message)
@@ -70,21 +76,16 @@ class AssistantConversation:
                     function_name = tool_call["function"]["name"]
                     function_to_call = self.available_functions.get(function_name)
                     if function_to_call:
-                        try:
-                            function_args = json.loads(tool_call["function"]["arguments"])
-                            function_response = function_to_call(**function_args)
-                            self.messages.append(
-                                {
-                                    "tool_call_id": tool_call["id"],
-                                    "role": "tool",
-                                    "name": function_name,
-                                    "content": function_response,
-                                }
-                            )
-                        except json.JSONDecodeError as e:
-                            logger.error(f"JSON Decode Error in tool call: {str(e)}")
-                            logger.error(f"Tool call arguments: {tool_call['function']['arguments']}")
-                            raise
+                        function_args = json.loads(tool_call["function"]["arguments"])
+                        function_response = function_to_call(**function_args)
+                        self.messages.append(
+                            {
+                                "tool_call_id": tool_call["id"],
+                                "role": "tool",
+                                "name": function_name,
+                                "content": function_response,
+                            }
+                        )
 
                 trimmed_messages = trim_messages(self.messages, self.model, max_tokens=MAX_TOKENS)
 
@@ -105,9 +106,7 @@ class AssistantConversation:
             return response_message["content"]
 
         except Exception as e:
-            import traceback
             logger.error(f"Error during LLM interaction: {str(e)}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
             return f"I'm sorry, but an error occurred: {str(e)}"
 
     def reset_conversation(self):

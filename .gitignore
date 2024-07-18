@@ -141,3 +141,7 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+#Memory
+checkpoints/
+memory.md

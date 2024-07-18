@@ -1,94 +1,98 @@
 import asyncio
-from collections import deque
-from time import time
-from typing import Any, Dict
+from typing import Any, Dict, List
+import aiofiles
+import json
 
-import jsonpickle
-from pydantic import BaseModel, Field
-from typing_extensions import TypedDict
+class ShortTermMemory:
+    def __init__(self):
+        self.last_input: str = ""
+        self.last_response: str = ""
+        self.context: Dict[str, Any] = {}
 
-from .state_manager import StateManager
+class LongTermMemory:
+    def __init__(self):
+        self.facts: List[str] = []
+        self.user_preferences: Dict[str, Any] = {}
 
-# Constants
-MAX_CONVERSATION_HISTORY = 1000
-LONG_TERM_MEMORY_TTL = 3600
+class MemoryState:
+    def __init__(self):
+        self.short_term = ShortTermMemory()
+        self.long_term = LongTermMemory()
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "short_term": {
+                "last_input": self.short_term.last_input,
+                "last_response": self.short_term.last_response,
+                "context": self.short_term.context
+            },
+            "long_term": {
+                "facts": self.long_term.facts,
+                "user_preferences": self.long_term.user_preferences
+            }
+        }
 
-class ShortTermMemory(TypedDict):
-    last_input: str
-    last_response: str
-    context: Dict[str, Any]
-
-
-class LongTermMemory(BaseModel):
-    conversation_history: deque = Field(
-        default_factory=lambda: deque(maxlen=MAX_CONVERSATION_HISTORY)
-    )
-    max_response_length: int = 0
-    user_preferences: Dict[str, Any] = Field(default_factory=dict)
-    last_accessed: Dict[str, float] = Field(default_factory=dict)
-
-
-class MemoryState(BaseModel):
-    short_term: ShortTermMemory = Field(
-        default_factory=lambda: ShortTermMemory(last_input="", last_response="", context={})
-    )
-    long_term: LongTermMemory = Field(default_factory=LongTermMemory)
-
-    def dict(self, *args, **kwargs):
-        return jsonpickle.encode(self)
-
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'MemoryState':
+        state = cls()
+        state.short_term.last_input = data["short_term"]["last_input"]
+        state.short_term.last_response = data["short_term"]["last_response"]
+        state.short_term.context = data["short_term"]["context"]
+        state.long_term.facts = data["long_term"]["facts"]
+        state.long_term.user_preferences = data["long_term"]["user_preferences"]
+        return state
 
 class MemoryManager:
-    def __init__(self):
+    def __init__(self, memory_file: str = "memory.md"):
         self.state = MemoryState()
+        self.memory_file = memory_file
         self.lock = asyncio.Lock()
-        self.short_term_manager = StateManager()
-        self.long_term_manager = StateManager()
-
-        # Set up reducers
-        self.short_term_manager.set_reducer("last_input", lambda old, new: new)
-        self.short_term_manager.set_reducer("last_response", lambda old, new: new)
-        self.short_term_manager.set_reducer("context", lambda old, new: {**old, **new})
-
-        self.long_term_manager.set_reducer("max_response_length", max)
-        self.long_term_manager.set_reducer("user_preferences", lambda old, new: {**old, **new})
 
     async def update_short_term(self, key: str, value: Any):
         async with self.lock:
-            self.short_term_manager.update_state(key, value)
-            self.state.short_term[key] = self.short_term_manager.get_state(key)
+            setattr(self.state.short_term, key, value)
 
     async def update_long_term(self, key: str, value: Any):
         async with self.lock:
-            if key == "conversation_history":
-                self.state.long_term.conversation_history.append(value)
-            else:
-                self.long_term_manager.update_state(key, value)
-                setattr(self.state.long_term, key, self.long_term_manager.get_state(key))
-
-            self.state.long_term.last_accessed[key] = time()
+            if key == "facts":
+                self.state.long_term.facts.append(value)
+            elif key == "user_preferences":
+                self.state.long_term.user_preferences.update(value)
+            await self._save_long_term_memory()
 
     async def get_short_term(self, key: str) -> Any:
         async with self.lock:
-            return self.short_term_manager.get_state(key)
+            return getattr(self.state.short_term, key)
 
     async def get_long_term(self, key: str) -> Any:
         async with self.lock:
-            if key == "conversation_history":
-                return list(self.state.long_term.conversation_history)
-            return self.long_term_manager.get_state(key)
+            return getattr(self.state.long_term, key)
+
+    async def _save_long_term_memory(self):
+        async with aiofiles.open(self.memory_file, "w") as f:
+            await f.write("# Long-Term Memory\n\n")
+            await f.write("## Facts\n\n")
+            for fact in self.state.long_term.facts:
+                await f.write(f"- {fact}\n")
+            await f.write("\n## User Preferences\n\n")
+            for key, value in self.state.long_term.user_preferences.items():
+                await f.write(f"- {key}: {value}\n")
+
+    async def load_long_term_memory(self):
+        try:
+            async with aiofiles.open(self.memory_file, "r") as f:
+                content = await f.read()
+                sections = content.split("##")
+                for section in sections:
+                    if section.strip().startswith("Facts"):
+                        self.state.long_term.facts = [line.strip()[2:] for line in section.split("\n") if line.strip().startswith("- ")]
+                    elif section.strip().startswith("User Preferences"):
+                        self.state.long_term.user_preferences = dict(line.strip()[2:].split(": ") for line in section.split("\n") if line.strip().startswith("- "))
+        except FileNotFoundError:
+            # If the file doesn't exist, we'll start with an empty long-term memory
+            pass
 
     async def cleanup_long_term_memory(self):
-        async with self.lock:
-            current_time = time()
-            keys_to_remove = []
-            for key, last_accessed in self.state.long_term.last_accessed.items():
-                if current_time - last_accessed > LONG_TERM_MEMORY_TTL:
-                    keys_to_remove.append(key)
-
-            for key in keys_to_remove:
-                if hasattr(self.state.long_term, key):
-                    delattr(self.state.long_term, key)
-                self.long_term_manager.update_state(key, None)
-                del self.state.long_term.last_accessed[key]
+        # This method can be implemented to remove old or irrelevant memories
+        # For now, we'll just keep it as a placeholder
+        pass
