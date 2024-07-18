@@ -1,42 +1,35 @@
-# examples/simple_conversation.py
-
-import logging
+import asyncio
 import os
-
 from dotenv import load_dotenv
-from phi.assistant import Assistant
-from phi.llm.anthropic import Claude
 
 from smartgraph import AIActor, Edge, HumanActor, Node, SmartGraph, Task
-from smartgraph.checkpointer import Checkpointer
+from smartgraph.assistant_conversation import AssistantConversation
 from smartgraph.memory import MemoryManager
+from smartgraph.logging import SmartGraphLogger
 
 # Load environment variables
 load_dotenv()
 
 # Set up logging
-debug_mode = os.getenv("DEBUG_MODE", "FALSE").upper() == "TRUE"
-logging_level = logging.DEBUG if debug_mode else logging.INFO
-logging.basicConfig(level=logging_level)
-logger = logging.getLogger(__name__)
+logger = SmartGraphLogger.get_logger()
+logger.set_level("INFO")
 
+async def main():
+    # Get API key and model from environment variables
+    api_key = os.getenv("OPENAI_API_KEY")
+    model = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
 
-def main():
-    claude_model = os.getenv("CLAUDE_MODEL")
-    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable is not set")
 
-    if not claude_model:
-        raise ValueError("CLAUDE_MODEL environment variable is not set")
-    if not anthropic_api_key:
-        raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
-
-    # Initialize MemoryManager and Checkpointer
+    # Initialize MemoryManager (won't be used for long-term storage in this simple version)
     memory_manager = MemoryManager()
-    checkpointer = Checkpointer()
 
-    # Create a simple assistant
-    assistant = Assistant(
-        name="AI Assistant", llm=Claude(model=claude_model, api_key=anthropic_api_key)
+    # Initialize AssistantConversation
+    assistant = AssistantConversation(
+        name="Simple AI Assistant",
+        model=model,
+        api_key=api_key,
     )
 
     # Create actors
@@ -44,60 +37,54 @@ def main():
     ai_actor = AIActor(name="AI", assistant=assistant, memory_manager=memory_manager)
 
     # Create nodes
-    start_node = Node(actor=human_actor, task=Task(description="Start the conversation"))
-    ai_response_node = Node(
-        actor=ai_actor, task=Task(description="AI response", prompt="Respond to: {input[response]}")
+    user_input_node = Node(
+        id="user_input",
+        actor=human_actor,
+        task=Task(description="Get user input")
     )
-    human_feedback_node = Node(
-        actor=human_actor, task=Task(description="Provide feedback on AI's response")
+    ai_response_node = Node(
+        id="ai_response",
+        actor=ai_actor,
+        task=Task(
+            description="AI response",
+            prompt="Respond to the following input: {input}"
+        )
     )
 
     # Create edges
-    edge1 = Edge(source_id=start_node.id, target_id=ai_response_node.id)
-    edge2 = Edge(source_id=ai_response_node.id, target_id=human_feedback_node.id)
-    edge3 = Edge(
-        source_id=human_feedback_node.id,
-        target_id=ai_response_node.id,
-        conditions=[lambda data: data.get("response", "").lower() != "exit"],
-    )
+    edge1 = Edge(source_id="user_input", target_id="ai_response")
+    edge2 = Edge(source_id="ai_response", target_id="user_input")
 
     # Create SmartGraph
-    graph = SmartGraph(memory_manager=memory_manager, checkpointer=checkpointer)
+    graph = SmartGraph(memory_manager=memory_manager)
 
     # Add nodes and edges
-    for node in [start_node, ai_response_node, human_feedback_node]:
+    for node in [user_input_node, ai_response_node]:
         graph.add_node(node)
-        logger.debug(f"Added node: {node.id}")
-
-    for edge in [edge1, edge2, edge3]:
+    for edge in [edge1, edge2]:
         graph.add_edge(edge)
-        logger.debug(f"Added edge: {edge.source_id} -> {edge.target_id}")
 
-    # Draw and save the graph
-    graph.draw_graph("conversation_flow.png")
-    print("Graph visualization saved as 'conversation_flow.png'")
-
-    # Execute the graph
-    logger.debug("Starting graph execution")
-    thread_id = "conversation_1"
+    print("Welcome to the Simple Conversation System!")
+    print("Type 'exit' to end the conversation.")
 
     while True:
-        final_output, should_exit = graph.execute(
-            start_node.id, {"user_input": "Continue the conversation"}, thread_id
-        )
+        try:
+            result, should_exit = await graph.execute("user_input", {}, "simple_conversation")
+            
+            if should_exit:
+                print("Conversation ended.")
+                break
 
-        print("\nConversation State:")
-        print(f"Short-term memory: {final_output['short_term']}")
-        print(f"Long-term memory: {final_output['long_term']}")
+            # Display the AI's response
+            ai_response = result['short_term'].get('response', 'No response')
+            print(f"\nAI: {ai_response}\n")
 
-        if should_exit:
-            print("Conversation ended.")
-            break
-
-    print("\nFinal Conversation State:")
-    print(f"Short-term memory: {final_output['short_term']}")
-    print(f"Long-term memory: {final_output['long_term']}")
-
+        except Exception as e:
+            logger.error(f"An error occurred: {str(e)}")
+            print("An error occurred. Would you like to continue? (yes/no)")
+            response = input().lower()
+            if response != 'yes':
+                break
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

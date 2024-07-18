@@ -3,15 +3,16 @@ import os
 from typing import Any, Dict, Optional
 
 import aiofiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from smartgraph.logging import SmartGraphLogger
+from smartgraph.memory import MemoryState
 
 logger = SmartGraphLogger.get_logger()
 
 class Checkpoint(BaseModel):
     node_id: str
-    state: str
+    state: Dict[str, Any]
     next_nodes: list[str]
 
 class CheckpointManager:
