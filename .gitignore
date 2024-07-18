@@ -143,5 +143,5 @@ Thumbs.db
 htmlcov/
 
 #Memory
-checkpoints/
+/checkpoints
 memory.md

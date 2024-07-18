@@ -16,7 +16,7 @@ logger = SmartGraphLogger.get_logger()
 
 class Actor(BaseModel, BaseActor):
     name: str
-    memory_manager: MemoryManager = Field(default_factory=MemoryManager)
+    memory_manager: Optional[MemoryManager] = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -31,7 +31,7 @@ class Actor(BaseModel, BaseActor):
 
 
 class HumanActor(BaseActor):
-    def __init__(self, name: str, memory_manager: MemoryManager):
+    def __init__(self, name: str, memory_manager: Optional[MemoryManager] = None):
         super().__init__(name, memory_manager)
 
     async def perform_task(
@@ -43,24 +43,25 @@ class HumanActor(BaseActor):
         # Use asyncio.to_thread to run input() in a separate thread
         user_input = await asyncio.to_thread(input, "Enter your response: ")
 
-        await self.memory_manager.update_short_term("last_input", user_input)
-        
-        # Check if the user wants to update preferences
-        if user_input.lower().startswith("set preference:"):
-            try:
-                _, pref = user_input.split(":", 1)
-                key, value = pref.strip().split(":", 1)
-                user_preference = {key.strip(): value.strip()}
-                await self.memory_manager.update_long_term("user_preferences", user_preference)
-                self.log.info(f"Updated user preference: {user_preference}")
-            except ValueError:
-                self.log.warning("Invalid preference format. Use 'set preference:key:value'")
+        if self.memory_manager:
+            await self.memory_manager.update_short_term("last_input", user_input)
+            
+            # Check if the user wants to update preferences
+            if user_input.lower().startswith("set preference:"):
+                try:
+                    _, pref = user_input.split(":", 1)
+                    key, value = pref.strip().split(":", 1)
+                    user_preference = {key.strip(): value.strip()}
+                    await self.memory_manager.update_long_term("user_preferences", user_preference)
+                    self.log.info(f"Updated user preference: {user_preference}")
+                except ValueError:
+                    self.log.warning("Invalid preference format. Use 'set preference:key:value'")
 
-        # Optionally access long-term memory
-        facts = await self.memory_manager.get_long_term("facts")
-        user_preferences = await self.memory_manager.get_long_term("user_preferences")
-        self.log.debug(f"Current facts: {facts}")
-        self.log.debug(f"Current user preferences: {user_preferences}")
+            # Optionally access long-term memory
+            facts = await self.memory_manager.get_long_term("facts")
+            user_preferences = await self.memory_manager.get_long_term("user_preferences")
+            self.log.debug(f"Current facts: {facts}")
+            self.log.debug(f"Current user preferences: {user_preferences}")
 
         return {"response": user_input}
 
@@ -69,8 +70,8 @@ class AIActor(BaseActor):
     def __init__(
         self,
         name: str,
-        memory_manager: MemoryManager,
         assistant: Optional[AssistantConversation] = None,
+        memory_manager: Optional[MemoryManager] = None,
     ):
         super().__init__(name, memory_manager)
         self.assistant = assistant
@@ -99,13 +100,14 @@ class AIActor(BaseActor):
 
             self.log.info(f"AI response: {response}")
 
-            await self.memory_manager.update_short_term("last_response", response)
+            if self.memory_manager:
+                await self.memory_manager.update_short_term("last_response", response)
 
-            # Extract and store important facts
-            facts = self._extract_facts(response)
-            for fact in facts:
-                await self.memory_manager.update_long_term("facts", fact)
-                self.log.info(f"Added new fact to long-term memory: {fact}")
+                # Extract and store important facts
+                facts = self._extract_facts(response)
+                for fact in facts:
+                    await self.memory_manager.update_long_term("facts", fact)
+                    self.log.info(f"Added new fact to long-term memory: {fact}")
 
             return {"response": response}
         except Exception as e:
@@ -116,16 +118,22 @@ class AIActor(BaseActor):
     async def _build_context(
         self, input_data: Dict[str, Any], state: Dict[str, Any]
     ) -> Dict[str, Any]:
-        short_term = await self.memory_manager.get_short_term("context")
-        facts = await self.memory_manager.get_long_term("facts")
-        user_preferences = await self.memory_manager.get_long_term("user_preferences")
-        return {
+        context = {
             "input": input_data if isinstance(input_data, str) else str(input_data),
             "state": state,
-            "short_term_memory": short_term,
-            "long_term_facts": facts,
-            "user_preferences": user_preferences,
         }
+
+        if self.memory_manager:
+            short_term = await self.memory_manager.get_short_term("context")
+            facts = await self.memory_manager.get_long_term("facts")
+            user_preferences = await self.memory_manager.get_long_term("user_preferences")
+            context.update({
+                "short_term_memory": short_term,
+                "long_term_facts": facts,
+                "user_preferences": user_preferences,
+            })
+
+        return context
 
     def _extract_facts(self, response: str) -> List[str]:
         # This is a simple implementation. You might want to use more sophisticated NLP techniques
