@@ -21,6 +21,7 @@ aiofiles = "^24.1.0"
 requests = "^2.32.3"
 duckduckgo-search = "^6.2.0"
 jsonpickle = "^3.2.2"
+rich = "^13.7.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0.0"
