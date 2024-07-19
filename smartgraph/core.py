@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-
 from typing import Any, Dict, List, Optional
 
 import networkx as nx
@@ -11,9 +10,8 @@ from reactivex import Observable, Subject
 from reactivex import operators as ops
 from reactivex.subject import Subject  # noqa: F811
 
-from .components import AggregatorComponent
-
 from .component import ReactiveAIComponent
+from .components import AggregatorComponent
 from .exceptions import GraphStructureError
 from .logging import SmartGraphLogger
 
@@ -58,7 +56,7 @@ class ReactiveSmartGraph:
         self.global_input = Subject()
         self.global_output = Subject()
 
-    def add_node(self, node: 'ReactiveNode') -> None:
+    def add_node(self, node: "ReactiveNode") -> None:
         if node.id in self.nodes:
             raise GraphStructureError(f"Node with id '{node.id}' already exists in the graph")
         self.nodes[node.id] = node
@@ -66,7 +64,7 @@ class ReactiveSmartGraph:
         node.output.subscribe(self.global_output)
         logger.debug(f"Added node: {node.id}")
 
-    def add_edge(self, edge: 'ReactiveEdge') -> None:
+    def add_edge(self, edge: "ReactiveEdge") -> None:
         if edge.source_id not in self.nodes or edge.target_id not in self.nodes:
             raise GraphStructureError(f"Invalid edge: {edge.source_id} -> {edge.target_id}")
         self.graph.add_edge(edge.source_id, edge.target_id, condition=edge.condition)
@@ -77,7 +75,7 @@ class ReactiveSmartGraph:
             raise GraphStructureError(f"Start node '{start_node_id}' not found in the graph")
 
         logger.info(f"Starting execution from node: {start_node_id}")
-        
+
         async def process_node(node_id: str, data: Any):
             node = self.nodes[node_id]
             logger.debug(f"Processing node: {node_id}")
@@ -95,7 +93,7 @@ class ReactiveSmartGraph:
             tasks = []
             for next_node in next_nodes:
                 edge_data = self.graph.get_edge_data(node_id, next_node)
-                condition = edge_data.get('condition', lambda _: True)
+                condition = edge_data.get("condition", lambda _: True)
                 if condition(result):
                     tasks.append(traverse_graph(next_node, result))
             if tasks:
@@ -104,7 +102,9 @@ class ReactiveSmartGraph:
             return result
 
         try:
-            final_result = await asyncio.wait_for(traverse_graph(start_node_id, input_data), timeout=30)
+            final_result = await asyncio.wait_for(
+                traverse_graph(start_node_id, input_data), timeout=30
+            )
             logger.info(f"Execution completed. Final result: {final_result}")
             return final_result
         except asyncio.TimeoutError:

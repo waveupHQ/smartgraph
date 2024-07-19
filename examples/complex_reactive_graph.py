@@ -1,8 +1,8 @@
 # examples/complex_reactive_graph.py
 
 import asyncio
-from typing import Any, List
 import logging
+from typing import Any, List
 
 from smartgraph import ReactiveAIComponent, ReactiveEdge, ReactiveNode, ReactiveSmartGraph
 from smartgraph.components import AggregatorComponent
@@ -10,11 +10,13 @@ from smartgraph.components import AggregatorComponent
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class SimpleComponent(ReactiveAIComponent):
     async def process(self, input_data: Any) -> Any:
         logger.info(f"{self.name} processing: {input_data}")
         await asyncio.sleep(1)
         return f"Processed by {self.name}: {input_data}"
+
 
 class UppercaseComponent(ReactiveAIComponent):
     async def process(self, input_data: Any) -> Any:
@@ -30,19 +32,24 @@ class DecisionComponent(ReactiveAIComponent):
         decision = "path_a" if "UPPERCASE" in input_data else "path_b"
         return f"Decision: {decision} for input: {input_data}"
 
+
 class MockAIAssistant(ReactiveAIComponent):
     async def process(self, input_data: Any) -> Any:
         logger.info(f"{self.name} processing: {input_data}")
         await asyncio.sleep(2)
         return f"AI analysis: The input contains a decision ({input_data.split(':')[1].split()[0]}) based on aggregated data."
 
+
 class SummaryComponent(ReactiveAIComponent):
     async def process(self, input_data: Any) -> Any:
         logger.info(f"{self.name} summarizing: {input_data}")
         await asyncio.sleep(1)
-        decision = input_data.split(':')[1].split()[0]
-        original_input = input_data.split('Aggregated result:')[-1].strip()
-        return f"Summary: Decision '{decision}' was made based on input containing '{original_input}'"
+        decision = input_data.split(":")[1].split()[0]
+        original_input = input_data.split("Aggregated result:")[-1].strip()
+        return (
+            f"Summary: Decision '{decision}' was made based on input containing '{original_input}'"
+        )
+
 
 async def main():
     graph = ReactiveSmartGraph()
@@ -87,6 +94,7 @@ async def main():
         logger.error("Execution timed out")
     except Exception as e:
         logger.error(f"Execution failed: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
