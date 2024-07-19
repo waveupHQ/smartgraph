@@ -1,5 +1,11 @@
+# smartgraph/logging.py
+
 import logging
 from typing import Optional
+
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.theme import Theme
 
 
 class SmartGraphLogger:
@@ -8,19 +14,32 @@ class SmartGraphLogger:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(SmartGraphLogger, cls).__new__(cls)
-            cls._instance._logger = logging.getLogger("SmartGraph")
             cls._instance._configure_logger()
         return cls._instance
 
     def _configure_logger(self):
-        self._logger.setLevel(logging.DEBUG)  # Set to DEBUG by default
-        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        # Define a custom theme for our logger
+        custom_theme = Theme(
+            {
+                "info": "cyan",
+                "warning": "yellow",
+                "error": "bold red",
+                "critical": "bold white on red",
+            }
+        )
 
-        # Console handler
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.DEBUG)
-        console_handler.setFormatter(formatter)
-        self._logger.addHandler(console_handler)
+        # Create a Rich console with our custom theme
+        console = Console(theme=custom_theme)
+
+        # Configure the RichHandler
+        rich_handler = RichHandler(
+            console=console, show_time=True, show_path=True, markup=True, rich_tracebacks=True
+        )
+
+        # Create and configure the logger
+        self._logger = logging.getLogger("SmartGraph")
+        self._logger.setLevel(logging.DEBUG)
+        self._logger.addHandler(rich_handler)
 
     def debug(self, message: str):
         self._logger.debug(message)
@@ -50,12 +69,12 @@ class SmartGraphLogger:
 
     def add_file_handler(self, filename: str, level: Optional[str] = None):
         """Add a file handler to the logger."""
-        handler = logging.FileHandler(filename)
+        file_handler = logging.FileHandler(filename)
         if level:
             numeric_level = getattr(logging, level.upper(), None)
             if not isinstance(numeric_level, int):
                 raise ValueError(f"Invalid log level: {level}")
-            handler.setLevel(numeric_level)
+            file_handler.setLevel(numeric_level)
         formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        handler.setFormatter(formatter)
-        self._logger.addHandler(handler)
+        file_handler.setFormatter(formatter)
+        self._logger.addHandler(file_handler)

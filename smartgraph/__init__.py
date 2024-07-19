@@ -1,10 +1,9 @@
 # smartgraph/__init__.py
 
-from .actors import Actor, AIActor, HumanActor
-from .base import BaseActor, BaseNode, Task
-from .core import Edge, Node, SmartGraph
+from .assistant_conversation import ReactiveAssistantConversation
+from .component import ReactiveAIComponent
+from .core import ReactiveEdge, ReactiveNode, ReactiveSmartGraph
 from .exceptions import (
-    ActorExecutionError,
     ConfigurationError,
     ExecutionError,
     GraphStructureError,
@@ -13,31 +12,22 @@ from .exceptions import (
     ValidationError,
 )
 from .logging import SmartGraphLogger
-from .memory import MemoryManager
-from .reducers import dict_update_reducer, list_append_reducer, max_reducer
+
+# You can also include any utility functions or constants if you've defined any
 
 __all__ = [
-    "SmartGraph",
-    "Node",
-    "Edge",
-    "Task",
-    "BaseActor",
-    "BaseNode",
-    "Actor",
-    "HumanActor",
-    "AIActor",
-    "MemoryManager",
-    "dict_update_reducer",
-    "list_append_reducer",
-    "max_reducer",
+    "ReactiveAIComponent",
+    "ReactiveNode",
+    "ReactiveEdge",
+    "ReactiveSmartGraph",
+    "ReactiveAssistantConversation",
+    "SmartGraphLogger",
     "SmartGraphException",
     "ExecutionError",
     "ConfigurationError",
     "ValidationError",
     "MemoryError",
     "GraphStructureError",
-    "ActorExecutionError",
-    "SmartGraphLogger",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"  # Update this to reflect the new reactive version
