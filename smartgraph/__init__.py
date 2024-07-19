@@ -12,6 +12,7 @@ from .exceptions import (
     ValidationError,
 )
 from .logging import SmartGraphLogger
+from smartgraph.components import AggregatorComponent
 
 # You can also include any utility functions or constants if you've defined any
 
@@ -28,6 +29,7 @@ __all__ = [
     "ValidationError",
     "MemoryError",
     "GraphStructureError",
+"AggregatorComponent"
 ]
 
 __version__ = "0.2.0"  # Update this to reflect the new reactive version
