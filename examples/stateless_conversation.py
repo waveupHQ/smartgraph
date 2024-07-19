@@ -24,6 +24,7 @@ You are a helpful AI assistant. Your responses should be informative, polite, an
 If you're unsure about something, it's okay to say you don't know.
 """
 
+
 async def main():
     # Initialize AssistantConversation
     assistant = AssistantConversation(
@@ -38,17 +39,12 @@ async def main():
 
     # Create nodes
     user_input_node = Node(
-        id="user_input",
-        actor=human_actor,
-        task=Task(description="Get user input")
+        id="user_input", actor=human_actor, task=Task(description="Get user input")
     )
     ai_response_node = Node(
         id="ai_response",
         actor=ai_actor,
-        task=Task(
-            description="AI response",
-            prompt=f"{SYSTEM_MESSAGE}\nUser: {{input}}\nAI:"
-        )
+        task=Task(description="AI response", prompt=f"{SYSTEM_MESSAGE}\nUser: {{input}}\nAI:"),
     )
 
     # Create edges
@@ -70,13 +66,13 @@ async def main():
     while True:
         try:
             result, should_exit = await graph.execute("user_input", {}, "stateless_conversation")
-            
+
             if should_exit:
                 print("Conversation ended.")
                 break
 
             # Display the AI's response
-            ai_response = result['short_term'].get('response', 'No response')
+            ai_response = result["short_term"].get("response", "No response")
             print(f"\nAI: {ai_response}\n")
 
             # Reset the assistant's conversation after each interaction
@@ -86,8 +82,9 @@ async def main():
             logger.error(f"An error occurred: {str(e)}")
             print("An error occurred. Would you like to continue? (yes/no)")
             response = input().lower()
-            if response != 'yes':
+            if response != "yes":
                 break
+
 
 if __name__ == "__main__":
     asyncio.run(main())

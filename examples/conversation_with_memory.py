@@ -1,11 +1,12 @@
 import asyncio
 import os
+
 from dotenv import load_dotenv
 
 from smartgraph import AIActor, Edge, HumanActor, Node, SmartGraph, Task
 from smartgraph.assistant_conversation import AssistantConversation
-from smartgraph.memory import MemoryManager
 from smartgraph.logging import SmartGraphLogger
+from smartgraph.memory import MemoryManager
 
 # Load environment variables
 load_dotenv()
@@ -17,6 +18,7 @@ logger.set_level("INFO")
 # Get API key and model from environment variables
 api_key = os.getenv("OPENAI_API_KEY")
 model = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+
 
 async def main():
     # Initialize MemoryManager
@@ -35,25 +37,23 @@ async def main():
 
     # Create nodes
     user_input_node = Node(
-        id="user_input",
-        actor=human_actor,
-        task=Task(description="Get user input")
+        id="user_input", actor=human_actor, task=Task(description="Get user input")
     )
     ai_response_node = Node(
         id="ai_response",
         actor=ai_actor,
         task=Task(
             description="Provide a response based on user input and memory",
-            prompt="Respond to the following input, using relevant facts and user preferences from memory if applicable: {input}"
-        )
+            prompt="Respond to the following input, using relevant facts and user preferences from memory if applicable: {input}",
+        ),
     )
     memory_summary_node = Node(
         id="memory_summary",
         actor=ai_actor,
         task=Task(
             description="Summarize current memory state",
-            prompt="Provide a brief summary of the current memory state, including key facts and user preferences."
-        )
+            prompt="Provide a brief summary of the current memory state, including key facts and user preferences.",
+        ),
     )
 
     # Create edges
@@ -79,13 +79,13 @@ async def main():
     while True:
         try:
             result, should_exit = await graph.execute("user_input", {}, "memory_conversation")
-            
+
             if should_exit:
                 print("Conversation ended.")
                 break
 
             # Display the memory summary
-            memory_summary = result['short_term'].get('response', '')
+            memory_summary = result["short_term"].get("response", "")
             print("\nMemory Summary:")
             print(memory_summary)
             print("\n---")
@@ -93,13 +93,13 @@ async def main():
             logger.error(f"An error occurred: {str(e)}")
             print("An error occurred. Would you like to continue? (yes/no)")
             response = input().lower()
-            if response != 'yes':
+            if response != "yes":
                 break
 
     # After the conversation, display the final memory state
     facts = await memory_manager.get_long_term("facts")
     preferences = await memory_manager.get_long_term("user_preferences")
-    
+
     print("\nFinal Memory State:")
     print("Facts learned:")
     for fact in facts:
@@ -107,6 +107,7 @@ async def main():
     print("\nUser Preferences:")
     for key, value in preferences.items():
         print(f"- {key}: {value}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

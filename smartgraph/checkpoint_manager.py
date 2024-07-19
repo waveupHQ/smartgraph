@@ -10,10 +10,12 @@ from smartgraph.memory import MemoryState
 
 logger = SmartGraphLogger.get_logger()
 
+
 class Checkpoint(BaseModel):
     node_id: str
     state: Dict[str, Any]
     next_nodes: list[str]
+
 
 class CheckpointManager:
     def __init__(self, storage_path: str = "checkpoints"):

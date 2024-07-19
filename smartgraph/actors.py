@@ -13,6 +13,7 @@ from .memory import MemoryManager
 
 logger = SmartGraphLogger.get_logger()
 
+
 class Actor(BaseModel, BaseActor):
     name: str
     memory_manager: Optional[MemoryManager] = None
@@ -27,6 +28,7 @@ class Actor(BaseModel, BaseActor):
         self, task: Task, input_data: Dict[str, Any], state: Dict[str, Any]
     ) -> Dict[str, Any]:
         raise NotImplementedError
+
 
 class HumanActor(BaseActor):
     def __init__(self, name: str, memory_manager: Optional[MemoryManager] = None):
@@ -43,7 +45,7 @@ class HumanActor(BaseActor):
         if self.memory_manager:
             await self.memory_manager.update_short_term("last_input", user_input)
             await self.memory_manager.update_conversation_history(user_input, is_user=True)
-            
+
             if user_input.lower().startswith("set preference:"):
                 try:
                     _, pref = user_input.split(":", 1)
@@ -55,6 +57,7 @@ class HumanActor(BaseActor):
                     self.log.warning("Invalid preference format. Use 'set preference:key:value'")
 
         return {"response": user_input}
+
 
 class AIActor(BaseActor):
     def __init__(
@@ -116,11 +119,13 @@ class AIActor(BaseActor):
         if self.memory_manager:
             context["conversation_history"] = await self.memory_manager.get_conversation_history()
             context["facts"] = await self.memory_manager.get_long_term("facts")
-            context["user_preferences"] = await self.memory_manager.get_long_term("user_preferences")
+            context["user_preferences"] = await self.memory_manager.get_long_term(
+                "user_preferences"
+            )
 
         return context
 
     def _extract_facts(self, response: str) -> List[str]:
-        sentences = response.split('.')
-        facts = [s.strip() for s in sentences if len(s.split()) > 5 and not s.strip().endswith('?')]
+        sentences = response.split(".")
+        facts = [s.strip() for s in sentences if len(s.split()) > 5 and not s.strip().endswith("?")]
         return facts[:3]  # Limit to 3 facts per response

@@ -104,6 +104,7 @@ class SmartGraph(BaseModel):
     checkpoint_frequency: int = 2  # Save checkpoint every 5 nodes
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
     async def execute(
         self, start_node_id: str, input_data: Dict[str, Any], thread_id: str
     ) -> Tuple[Dict[str, Any], bool]:
@@ -137,7 +138,9 @@ class SmartGraph(BaseModel):
                 if "fact" in node_output:
                     await self.memory_manager.update_long_term("facts", node_output["fact"])
                 if "user_preference" in node_output:
-                    await self.memory_manager.update_long_term("user_preferences", node_output["user_preference"])
+                    await self.memory_manager.update_long_term(
+                        "user_preferences", node_output["user_preference"]
+                    )
 
                 # Check for exit condition
                 if node_output.get("response", "").lower() == "exit":
@@ -188,6 +191,7 @@ class SmartGraph(BaseModel):
         await self.memory_manager.cleanup_long_term_memory()
 
         return self.memory_manager.state.to_dict(), should_exit
+
     def _should_save_checkpoint(self, node_count: int) -> bool:
         return node_count % self.checkpoint_frequency == 0
 
@@ -213,4 +217,3 @@ class SmartGraph(BaseModel):
             str: Mermaid diagram representation of the graph.
         """
         return GraphVisualizer.generate_mermaid_diagram(self.graph)
-

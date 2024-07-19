@@ -1,11 +1,12 @@
 import asyncio
 import os
+
 from dotenv import load_dotenv
 
 from smartgraph import AIActor, Edge, HumanActor, Node, SmartGraph, Task
 from smartgraph.assistant_conversation import AssistantConversation
-from smartgraph.memory import MemoryManager
 from smartgraph.logging import SmartGraphLogger
+from smartgraph.memory import MemoryManager
 
 # Load environment variables
 load_dotenv()
@@ -13,6 +14,7 @@ load_dotenv()
 # Set up logging
 logger = SmartGraphLogger.get_logger()
 logger.set_level("INFO")
+
 
 async def main():
     # Get API key and model from environment variables
@@ -38,17 +40,12 @@ async def main():
 
     # Create nodes
     user_input_node = Node(
-        id="user_input",
-        actor=human_actor,
-        task=Task(description="Get user input")
+        id="user_input", actor=human_actor, task=Task(description="Get user input")
     )
     ai_response_node = Node(
         id="ai_response",
         actor=ai_actor,
-        task=Task(
-            description="AI response",
-            prompt="Respond to the following input: {input}"
-        )
+        task=Task(description="AI response", prompt="Respond to the following input: {input}"),
     )
 
     # Create edges
@@ -70,21 +67,22 @@ async def main():
     while True:
         try:
             result, should_exit = await graph.execute("user_input", {}, "simple_conversation")
-            
+
             if should_exit:
                 print("Conversation ended.")
                 break
 
             # Display the AI's response
-            ai_response = result['short_term'].get('response', 'No response')
+            ai_response = result["short_term"].get("response", "No response")
             print(f"\nAI: {ai_response}\n")
 
         except Exception as e:
             logger.error(f"An error occurred: {str(e)}")
             print("An error occurred. Would you like to continue? (yes/no)")
             response = input().lower()
-            if response != 'yes':
+            if response != "yes":
                 break
+
 
 if __name__ == "__main__":
     asyncio.run(main())

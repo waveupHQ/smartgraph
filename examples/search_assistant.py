@@ -1,10 +1,12 @@
 import asyncio
 import os
+
 from dotenv import load_dotenv
+
 from smartgraph import AIActor, Edge, HumanActor, Node, SmartGraph, Task
 from smartgraph.assistant_conversation import AssistantConversation
-from smartgraph.memory import MemoryManager
 from smartgraph.logging import SmartGraphLogger
+from smartgraph.memory import MemoryManager
 from smartgraph.tools import DuckDuckGoSearch
 
 # Load environment variables
@@ -17,6 +19,7 @@ logger.set_level("INFO")
 # Get API key and model from environment variables
 api_key = os.getenv("OPENAI_API_KEY")
 model = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+
 
 async def main():
     # Initialize MemoryManager
@@ -43,22 +46,18 @@ async def main():
 
     # Create nodes
     user_input_node = Node(
-        id="user_input",
-        actor=human_actor,
-        task=Task(description="Get search query from user")
+        id="user_input", actor=human_actor, task=Task(description="Get search query from user")
     )
     search_node = Node(
         id="search",
         actor=ai_actor,
         task=Task(
             description="Perform web search and summarize results",
-            prompt="Search the web for: {input}. Then, provide a concise summary of the most relevant information."
-        )
+            prompt="Search the web for: {input}. Then, provide a concise summary of the most relevant information.",
+        ),
     )
     present_results_node = Node(
-        id="present_results",
-        actor=ai_actor,
-        task=Task(description="Present search results")
+        id="present_results", actor=ai_actor, task=Task(description="Present search results")
     )
 
     # Create edges
@@ -82,13 +81,13 @@ async def main():
     while True:
         try:
             result, should_exit = await graph.execute("user_input", {}, "search_session")
-            
+
             if should_exit:
                 print("Search session ended.")
                 break
 
             # Display the search results
-            search_results = result['short_term'].get('response', '')
+            search_results = result["short_term"].get("response", "")
             print("\nSearch Results:")
             print(search_results)
             print("\n---")
@@ -97,13 +96,13 @@ async def main():
             logger.error(f"An error occurred: {str(e)}")
             print("An error occurred. Would you like to continue? (yes/no)")
             response = input().lower()
-            if response != 'yes':
+            if response != "yes":
                 break
 
     # After the search session, display the final memory state
     facts = await memory_manager.get_long_term("facts")
     preferences = await memory_manager.get_long_term("user_preferences")
-    
+
     print("\nFinal Memory State:")
     print("Facts learned:")
     for fact in facts:
@@ -111,6 +110,7 @@ async def main():
     print("\nUser Preferences:")
     for key, value in preferences.items():
         print(f"- {key}: {value}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

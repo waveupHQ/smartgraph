@@ -1,7 +1,9 @@
 import asyncio
-from typing import Any, Dict, List
-import aiofiles
 import json
+from typing import Any, Dict, List
+
+import aiofiles
+
 
 class ShortTermMemory:
     def __init__(self):
@@ -10,10 +12,12 @@ class ShortTermMemory:
         self.context: Dict[str, Any] = {}
         self.conversation_history: List[str] = []
 
+
 class LongTermMemory:
     def __init__(self):
         self.facts: List[str] = []
         self.user_preferences: Dict[str, Any] = {}
+
 
 class MemoryState:
     def __init__(self):
@@ -26,16 +30,16 @@ class MemoryState:
                 "last_input": self.short_term.last_input,
                 "last_response": self.short_term.last_response,
                 "context": self.short_term.context,
-                "conversation_history": self.short_term.conversation_history
+                "conversation_history": self.short_term.conversation_history,
             },
             "long_term": {
                 "facts": self.long_term.facts,
-                "user_preferences": self.long_term.user_preferences
-            }
+                "user_preferences": self.long_term.user_preferences,
+            },
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'MemoryState':
+    def from_dict(cls, data: Dict[str, Any]) -> "MemoryState":
         state = cls()
         state.short_term.last_input = data["short_term"]["last_input"]
         state.short_term.last_response = data["short_term"]["last_response"]
@@ -44,6 +48,7 @@ class MemoryState:
         state.long_term.facts = data["long_term"]["facts"]
         state.long_term.user_preferences = data["long_term"]["user_preferences"]
         return state
+
 
 class MemoryManager:
     def __init__(self, memory_file: str = "memory.md"):
@@ -76,7 +81,9 @@ class MemoryManager:
             prefix = "User: " if is_user else "AI: "
             self.state.short_term.conversation_history.append(f"{prefix}{message}")
             # Keep only the last 10 messages
-            self.state.short_term.conversation_history = self.state.short_term.conversation_history[-10:]
+            self.state.short_term.conversation_history = self.state.short_term.conversation_history[
+                -10:
+            ]
 
     async def get_conversation_history(self) -> List[str]:
         async with self.lock:
@@ -99,9 +106,17 @@ class MemoryManager:
                 sections = content.split("##")
                 for section in sections:
                     if section.strip().startswith("Facts"):
-                        self.state.long_term.facts = [line.strip()[2:] for line in section.split("\n") if line.strip().startswith("- ")]
+                        self.state.long_term.facts = [
+                            line.strip()[2:]
+                            for line in section.split("\n")
+                            if line.strip().startswith("- ")
+                        ]
                     elif section.strip().startswith("User Preferences"):
-                        self.state.long_term.user_preferences = dict(line.strip()[2:].split(": ") for line in section.split("\n") if line.strip().startswith("- "))
+                        self.state.long_term.user_preferences = dict(
+                            line.strip()[2:].split(": ")
+                            for line in section.split("\n")
+                            if line.strip().startswith("- ")
+                        )
         except FileNotFoundError:
             # If the file doesn't exist, we'll start with an empty long-term memory
             pass
