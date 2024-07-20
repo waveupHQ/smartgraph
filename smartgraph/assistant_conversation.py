@@ -135,24 +135,4 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
         current_context = self.context.value
         current_context.update(new_context)
         self.update_state("context", current_context)
-        # logger.info(f"Context updated: {current_context}")
-
-
-# Example usage
-async def main():
-    assistant = ReactiveAssistantConversation(name="Example Assistant")
-    assistant.update_context({"user_info": "This is a test user."})
-
-    def on_response(response):
-        print(f"Assistant: {response}")
-
-    assistant.output.subscribe(on_response)
-
-    user_input = "Hello, can you tell me about the context you have?"
-    await assistant.process(user_input)
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(main())
+        logger.info(f"Context updated: {current_context}")
