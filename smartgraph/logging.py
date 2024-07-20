@@ -50,11 +50,11 @@ class SmartGraphLogger:
     def warning(self, message: str):
         self._logger.warning(message)
 
-    def error(self, message: str):
-        self._logger.error(message)
+    def error(self, message: str, exc_info: bool = False):
+        self._logger.error(message, exc_info=exc_info)
 
-    def critical(self, message: str):
-        self._logger.critical(message)
+    def critical(self, message: str, exc_info: bool = False):
+        self._logger.critical(message, exc_info=exc_info)
 
     @classmethod
     def get_logger(cls):
