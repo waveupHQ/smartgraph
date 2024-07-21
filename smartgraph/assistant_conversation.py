@@ -11,6 +11,7 @@ from reactivex.subject import Subject
 
 from .component import ReactiveAIComponent
 from .logging import SmartGraphLogger
+from .tools.base_toolkit import Toolkit
 
 logger = SmartGraphLogger.get_logger()
 
@@ -20,7 +21,7 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
     def __init__(
         self,
         name: str = "AI Assistant",
-        tools: Optional[List[Dict[str, Any]]] = None,
+        toolkits: Optional[List[Toolkit]] = None,
         model: str = "gpt-4o-mini",
         api_key: Optional[str] = None,
         tool_choice: str = "auto",
@@ -32,7 +33,7 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
         debug_mode: bool = False
     ):
         super().__init__(name)
-        self.tools = tools or []
+        self.toolkits = toolkits or []
         self.model = model
         self.api_key = api_key
         self.tool_choice = tool_choice
@@ -45,10 +46,23 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
 
         self.messages = self.create_state("messages", [])
         self.context = self.create_state("context", {})
-        self.available_functions = {}
+        self.available_functions = self._gather_functions()
 
-    def add_function(self, function_name: str, function):
-        self.available_functions[function_name] = function
+        # Check if the model supports function calling
+        self.supports_function_calling = litellm.supports_function_calling(self.model)
+        if not self.supports_function_calling:
+            litellm.add_function_to_prompt = True
+            logger.warning(f"Model {self.model} does not support function calling. Functions will be added to the prompt.")
+
+    def _gather_functions(self) -> Dict[str, Any]:
+        functions = {}
+        for toolkit in self.toolkits:
+            functions.update(toolkit.functions)
+        return functions
+
+    def add_toolkit(self, toolkit: Toolkit):
+        self.toolkits.append(toolkit)
+        self.available_functions.update(toolkit.functions)
 
     async def process(self, input_data: str) -> str:
         messages = self.messages.value + [{"role": "user", "content": input_data}]
@@ -87,9 +101,13 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
                 "presence_penalty": self.presence_penalty,
             }
 
-            if self.tools:
-                completion_params["tools"] = self.tools
-                completion_params["tool_choice"] = self.tool_choice
+            tools = [schema for toolkit in self.toolkits for schema in toolkit.schemas]
+            if tools:
+                if self.supports_function_calling:
+                    completion_params["tools"] = tools
+                    completion_params["tool_choice"] = self.tool_choice
+                else:
+                    completion_params["functions"] = tools
 
             if self.debug_mode:
                 logger.debug(f"Calling LLM with params: {completion_params}")
@@ -103,8 +121,8 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
 
             response_message = response.choices[0].message
 
-            if response_message.get("tool_calls"):
-                tool_calls = response_message["tool_calls"]
+            if response_message.get("tool_calls") or response_message.get("function_call"):
+                tool_calls = response_message.get("tool_calls") or [response_message.get("function_call")]
                 tool_call_messages = []
                 for tool_call in tool_calls:
                     function_name = tool_call["function"]["name"]
@@ -120,12 +138,13 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
                             {
                                 "role": "assistant",
                                 "content": None,
-                                "tool_calls": [tool_call]
+                                "tool_calls": [tool_call] if self.supports_function_calling else None,
+                                "function_call": None if self.supports_function_calling else tool_call
                             },
                             {
-                                "role": "tool",
+                                "role": "tool" if self.supports_function_calling else "function",
                                 "content": function_response,
-                                "tool_call_id": tool_call["id"]
+                                "tool_call_id": tool_call.get("id")
                             }
                         ])
 
@@ -168,5 +187,3 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
         self.update_state("context", current_context)
         if self.debug_mode:
             logger.info(f"Context updated: {current_context}")
-
-    # Additional methods from ReactiveAIComponent can be overridden or added here if needed

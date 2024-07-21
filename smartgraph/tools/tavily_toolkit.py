@@ -1,17 +1,19 @@
-# smartgraph/tools/tavily_tools.py
+# smartgraph/tools/tavily_toolkit.py
 
 import json
 import asyncio
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from os import getenv
 from functools import partial
 
 from dotenv import load_dotenv
 from tavily import TavilyClient
 
+from .base_toolkit import Toolkit
+
 load_dotenv()
 
-class TavilyTools:
+class TavilyToolkit(Toolkit):
     def __init__(
         self,
         api_key: Optional[str] = None,
@@ -27,6 +29,55 @@ class TavilyTools:
         self.search_depth = search_depth
         self.max_tokens = max_tokens
         self.include_answer = include_answer
+
+    @property
+    def name(self) -> str:
+        return "TavilyToolkit"
+
+    @property
+    def description(self) -> str:
+        return "A toolkit for performing web searches using the Tavily API."
+
+    @property
+    def functions(self) -> Dict[str, Any]:
+        return {
+            "tavily_search": self.search,
+            "tavily_search_with_context": self.search_with_context
+        }
+
+    @property
+    def schemas(self) -> List[Dict[str, Any]]:
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "tavily_search",
+                    "description": "Search the web using Tavily API",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "The search query"},
+                            "max_results": {"type": "integer", "description": "Maximum number of results to return", "default": 5}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "tavily_search_with_context",
+                    "description": "Search the web using Tavily API with context",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "The search query"}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            }
+        ]
 
     async def search(self, query: str, max_results: int = 5) -> str:
         """Search the web using Tavily API."""
@@ -79,38 +130,3 @@ class TavilyTools:
         clean_response["results"] = clean_results
 
         return clean_response
-
-    @property
-    def search_schema(self) -> Dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {
-                "name": "tavily_search",
-                "description": "Search the web using Tavily",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "The search query"},
-                        "max_results": {"type": "integer", "description": "Maximum number of results to return", "default": 5}
-                    },
-                    "required": ["query"]
-                }
-            }
-        }
-
-    @property
-    def search_with_context_schema(self) -> Dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {
-                "name": "tavily_search_with_context",
-                "description": "Search the web using Tavily with context",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "The search query"}
-                    },
-                    "required": ["query"]
-                }
-            }
-        }
