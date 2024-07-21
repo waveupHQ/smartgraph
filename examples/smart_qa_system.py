@@ -21,12 +21,11 @@ from smartgraph import (
     ReactiveSmartGraph,
 )
 from smartgraph.logging import SmartGraphLogger
-from smartgraph.tools import DuckDuckGoSearch
+from smartgraph.tools.duckduckgo_toolkit import DuckDuckGoToolkit
 
 load_dotenv()
 logger = SmartGraphLogger.get_logger()
 console = Console()
-
 
 class QuestionAnalysisComponent(ReactiveAIComponent):
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -34,20 +33,19 @@ class QuestionAnalysisComponent(ReactiveAIComponent):
         return {
             "question": question,
             "requires_search": any(
-                word in question.lower() for word in ["who", "what", "when", "where", "why"]
+                word in question.lower() for word in ["who", "what", "when", "where", "why", "how"]
             ),
         }
 
-
 class WebSearchComponent(ReactiveAIComponent):
-    def __init__(self, name: str):
+    def __init__(self, name: str, toolkit: DuckDuckGoToolkit):
         super().__init__(name)
-        self.search_tool = DuckDuckGoSearch(max_results=3)
+        self.toolkit = toolkit
 
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         question = input_data["question"]
         try:
-            search_results = self.search_tool.search(question)
+            search_results = await self.toolkit.search(question)
             return {
                 "question": question,
                 "search_results": json.loads(search_results),
@@ -56,7 +54,6 @@ class WebSearchComponent(ReactiveAIComponent):
         except Exception as e:
             logger.error(f"Search failed: {str(e)}")
             return {"question": question, "search_results": [], "search_successful": False}
-
 
 class AnswerFormulationComponent(ReactiveAssistantConversation):
     def __init__(self, name: str, api_key: str):
@@ -69,7 +66,7 @@ class AnswerFormulationComponent(ReactiveAssistantConversation):
 
         if search_successful and search_results:
             search_results_str = "\n".join(
-                [f"- {result['title']}: {result['body']}" for result in search_results]
+                [f"- {result['title']}: {result['body']}" for result in search_results[:3]]
             )
         else:
             search_results_str = "No search results available."
@@ -84,7 +81,6 @@ class AnswerFormulationComponent(ReactiveAssistantConversation):
         response = await super().process(prompt)
         return {"question": question, "answer": response, "search_performed": search_successful}
 
-
 async def main():
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -94,13 +90,14 @@ async def main():
 
     # Create components
     question_analysis = QuestionAnalysisComponent("QuestionAnalysis")
-    web_search = WebSearchComponent("WebSearch")
+    duckduckgo_toolkit = DuckDuckGoToolkit(max_results=3)
+    web_search = WebSearchComponent("WebSearch", duckduckgo_toolkit)
     answer_formulation = AnswerFormulationComponent("AnswerFormulation", api_key)
 
     # Create nodes
     analysis_node = ReactiveNode("analysis", question_analysis)
     search_node = ReactiveNode("search", web_search)
-    answer_node = ReactiveNode("answer", answer_formulation, graph.state_manager)
+    answer_node = ReactiveNode("answer", answer_formulation)
 
     # Add nodes to the graph
     for node in [analysis_node, search_node, answer_node]:
@@ -178,7 +175,6 @@ async def main():
     console.print(
         "[bold yellow]All questions processed. Thank you for using SmartGraph![/bold yellow]"
     )
-
 
 if __name__ == "__main__":
     asyncio.run(main())
