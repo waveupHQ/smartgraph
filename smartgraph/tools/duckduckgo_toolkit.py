@@ -23,10 +23,7 @@ class DuckDuckGoToolkit(Toolkit):
 
     @property
     def functions(self) -> Dict[str, Any]:
-        return {
-            "duckduckgo_search": self.search,
-            "duckduckgo_news": self.news
-        }
+        return {"duckduckgo_search": self.search, "duckduckgo_news": self.news}
 
     @property
     def schemas(self) -> List[Dict[str, Any]]:
@@ -40,11 +37,14 @@ class DuckDuckGoToolkit(Toolkit):
                         "type": "object",
                         "properties": {
                             "query": {"type": "string", "description": "The search query"},
-                            "max_results": {"type": "integer", "description": "Maximum number of results to return"}
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Maximum number of results to return",
+                            },
                         },
-                        "required": ["query"]
-                    }
-                }
+                        "required": ["query"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -55,12 +55,15 @@ class DuckDuckGoToolkit(Toolkit):
                         "type": "object",
                         "properties": {
                             "query": {"type": "string", "description": "The news query"},
-                            "max_results": {"type": "integer", "description": "Maximum number of news items to return"}
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Maximum number of news items to return",
+                            },
                         },
-                        "required": ["query"]
-                    }
-                }
-            }
+                        "required": ["query"],
+                    },
+                },
+            },
         ]
 
     async def search(self, query: str, max_results: Optional[int] = None) -> str:

@@ -32,8 +32,8 @@ class Toolkit(ABC):
                 "function": {
                     "name": name,
                     "description": func.__doc__,
-                    "parameters": getattr(func, "schema", {})
-                }
+                    "parameters": getattr(func, "schema", {}),
+                },
             }
             for name, func in self.functions.items()
         ]

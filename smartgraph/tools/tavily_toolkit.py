@@ -1,10 +1,10 @@
 # smartgraph/tools/tavily_toolkit.py
 
-import json
 import asyncio
-from typing import Dict, Any, Optional, List
-from os import getenv
+import json
 from functools import partial
+from os import getenv
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from tavily import TavilyClient
@@ -13,13 +13,14 @@ from .base_toolkit import Toolkit
 
 load_dotenv()
 
+
 class TavilyToolkit(Toolkit):
     def __init__(
         self,
         api_key: Optional[str] = None,
         search_depth: str = "advanced",
         max_tokens: int = 4000,
-        include_answer: bool = True
+        include_answer: bool = True,
     ):
         self.api_key = api_key or getenv("TAVILY_API_KEY")
         if not self.api_key:
@@ -42,7 +43,7 @@ class TavilyToolkit(Toolkit):
     def functions(self) -> Dict[str, Any]:
         return {
             "tavily_search": self.search,
-            "tavily_search_with_context": self.search_with_context
+            "tavily_search_with_context": self.search_with_context,
         }
 
     @property
@@ -57,11 +58,15 @@ class TavilyToolkit(Toolkit):
                         "type": "object",
                         "properties": {
                             "query": {"type": "string", "description": "The search query"},
-                            "max_results": {"type": "integer", "description": "Maximum number of results to return", "default": 5}
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Maximum number of results to return",
+                                "default": 5,
+                            },
                         },
-                        "required": ["query"]
-                    }
-                }
+                        "required": ["query"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -73,10 +78,10 @@ class TavilyToolkit(Toolkit):
                         "properties": {
                             "query": {"type": "string", "description": "The search query"}
                         },
-                        "required": ["query"]
-                    }
-                }
-            }
+                        "required": ["query"],
+                    },
+                },
+            },
         ]
 
     async def search(self, query: str, max_results: int = 5) -> str:
@@ -89,8 +94,8 @@ class TavilyToolkit(Toolkit):
                 query=query,
                 search_depth=self.search_depth,
                 max_results=max_results,
-                include_answer=self.include_answer
-            )
+                include_answer=self.include_answer,
+            ),
         )
         return json.dumps(self._process_response(response, query))
 
@@ -104,8 +109,8 @@ class TavilyToolkit(Toolkit):
                 query=query,
                 search_depth=self.search_depth,
                 max_tokens=self.max_tokens,
-                include_answer=self.include_answer
-            )
+                include_answer=self.include_answer,
+            ),
         )
         return response
 
@@ -121,7 +126,7 @@ class TavilyToolkit(Toolkit):
                 "title": result["title"],
                 "url": result["url"],
                 "content": result["content"],
-                "score": result["score"]
+                "score": result["score"],
             }
             current_token_count += len(json.dumps(clean_result))
             if current_token_count > self.max_tokens:
