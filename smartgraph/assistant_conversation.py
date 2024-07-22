@@ -17,6 +17,7 @@ logger = SmartGraphLogger.get_logger()
 
 MAX_TOKENS = 4000
 
+
 class ReactiveAssistantConversation(ReactiveAIComponent):
     def __init__(
         self,
@@ -30,7 +31,7 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
         top_p: Optional[float] = None,
         frequency_penalty: Optional[float] = None,
         presence_penalty: Optional[float] = None,
-        debug_mode: bool = False
+        debug_mode: bool = False,
     ):
         super().__init__(name)
         self.toolkits = toolkits or []
@@ -52,7 +53,9 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
         self.supports_function_calling = litellm.supports_function_calling(self.model)
         if not self.supports_function_calling:
             litellm.add_function_to_prompt = True
-            logger.warning(f"Model {self.model} does not support function calling. Functions will be added to the prompt.")
+            logger.warning(
+                f"Model {self.model} does not support function calling. Functions will be added to the prompt."
+            )
 
     def _gather_functions(self) -> Dict[str, Any]:
         functions = {}
@@ -78,7 +81,9 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
             logger.error(f"Error during LLM interaction: {str(e)}")
             return f"I'm sorry, but an error occurred: {str(e)}"
 
-    async def _generate_response(self, messages: List[Dict[str, str]], context: Dict[str, Any]) -> Optional[str]:
+    async def _generate_response(
+        self, messages: List[Dict[str, str]], context: Dict[str, Any]
+    ) -> Optional[str]:
         try:
             if self.debug_mode:
                 logger.debug(f"Generating response with messages: {messages}")
@@ -122,7 +127,9 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
             response_message = response.choices[0].message
 
             if response_message.get("tool_calls") or response_message.get("function_call"):
-                tool_calls = response_message.get("tool_calls") or [response_message.get("function_call")]
+                tool_calls = response_message.get("tool_calls") or [
+                    response_message.get("function_call")
+                ]
                 tool_call_messages = []
                 for tool_call in tool_calls:
                     function_name = tool_call["function"]["name"]
@@ -130,23 +137,33 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
                     if function_to_call:
                         function_args = json.loads(tool_call["function"]["arguments"])
                         if self.debug_mode:
-                            logger.debug(f"Calling function {function_name} with args: {function_args}")
+                            logger.debug(
+                                f"Calling function {function_name} with args: {function_args}"
+                            )
                         function_response = await function_to_call(**function_args)
                         if self.debug_mode:
                             logger.debug(f"Function {function_name} response: {function_response}")
-                        tool_call_messages.extend([
-                            {
-                                "role": "assistant",
-                                "content": None,
-                                "tool_calls": [tool_call] if self.supports_function_calling else None,
-                                "function_call": None if self.supports_function_calling else tool_call
-                            },
-                            {
-                                "role": "tool" if self.supports_function_calling else "function",
-                                "content": function_response,
-                                "tool_call_id": tool_call.get("id")
-                            }
-                        ])
+                        tool_call_messages.extend(
+                            [
+                                {
+                                    "role": "assistant",
+                                    "content": None,
+                                    "tool_calls": [tool_call]
+                                    if self.supports_function_calling
+                                    else None,
+                                    "function_call": None
+                                    if self.supports_function_calling
+                                    else tool_call,
+                                },
+                                {
+                                    "role": "tool"
+                                    if self.supports_function_calling
+                                    else "function",
+                                    "content": function_response,
+                                    "tool_call_id": tool_call.get("id"),
+                                },
+                            ]
+                        )
 
                 messages.extend(tool_call_messages)
 
@@ -166,7 +183,9 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
                     logger.debug(f"Final response: {final_response}")
                 return final_response.choices[0].message["content"]
 
-            return response_message.get("content", "I'm sorry, but I couldn't generate a response. Please try again.")
+            return response_message.get(
+                "content", "I'm sorry, but I couldn't generate a response. Please try again."
+            )
         except Exception as e:
             logger.error(f"Error in _generate_response: {str(e)}", exc_info=True)
             return "I'm sorry, but an error occurred while processing your request. Please try again later."

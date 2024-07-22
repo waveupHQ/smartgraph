@@ -27,6 +27,7 @@ load_dotenv()
 logger = SmartGraphLogger.get_logger()
 console = Console()
 
+
 class QuestionAnalysisComponent(ReactiveAIComponent):
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         question = input_data["question"]
@@ -36,6 +37,7 @@ class QuestionAnalysisComponent(ReactiveAIComponent):
                 word in question.lower() for word in ["who", "what", "when", "where", "why", "how"]
             ),
         }
+
 
 class WebSearchComponent(ReactiveAIComponent):
     def __init__(self, name: str, toolkit: DuckDuckGoToolkit):
@@ -54,6 +56,7 @@ class WebSearchComponent(ReactiveAIComponent):
         except Exception as e:
             logger.error(f"Search failed: {str(e)}")
             return {"question": question, "search_results": [], "search_successful": False}
+
 
 class AnswerFormulationComponent(ReactiveAssistantConversation):
     def __init__(self, name: str, api_key: str):
@@ -80,6 +83,7 @@ class AnswerFormulationComponent(ReactiveAssistantConversation):
 
         response = await super().process(prompt)
         return {"question": question, "answer": response, "search_performed": search_successful}
+
 
 async def main():
     api_key = os.getenv("OPENAI_API_KEY")
@@ -175,6 +179,7 @@ async def main():
     console.print(
         "[bold yellow]All questions processed. Thank you for using SmartGraph![/bold yellow]"
     )
+
 
 if __name__ == "__main__":
     asyncio.run(main())
