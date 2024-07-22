@@ -3,7 +3,7 @@
 import asyncio
 import csv
 import json
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # noqa: N817
 from io import BytesIO, StringIO
 
 import pandas as pd
@@ -11,10 +11,6 @@ import pyarrow.parquet as pq
 import yaml
 
 from smartgraph import ReactiveAssistantConversation, ReactiveEdge, ReactiveNode, ReactiveSmartGraph
-from smartgraph.components.human_in_the_loop import (
-    BasicApprovalComponent,
-    CorrectionRefinementComponent,
-)
 from smartgraph.components.input_handlers import (
     CommandLineInputHandler,
     CSVInputHandler,
@@ -26,7 +22,6 @@ from smartgraph.components.input_handlers import (
     XMLInputHandler,
     YAMLInputHandler,
 )
-from smartgraph.tools.duckduckgo_toolkit import DuckDuckGoToolkit
 
 
 async def main():
@@ -40,17 +35,11 @@ async def main():
     xml_input = XMLInputHandler("XMLInput")
     csv_input = CSVInputHandler("CSVInput")
     yaml_input = YAMLInputHandler("YAMLInput")
-    parquet_input = ParquetInputHandler("ParquetInput")
+    # parquet_input = ParquetInputHandler("ParquetInput")
     structured_data_detector = StructuredDataDetector("StructuredDataDetector")
-    approval = BasicApprovalComponent("ApprovalComponent")
-    correction = CorrectionRefinementComponent("CorrectionComponent")
 
-    duckduckgo_toolkit = DuckDuckGoToolkit(max_results=3)
     assistant = ReactiveAssistantConversation(
-        name="Interactive Assistant",
-        toolkits=[duckduckgo_toolkit],
-        model="gpt-4-0613",
-        api_key="your-api-key-here",
+        name="Interactive Assistant", model="gpt-4o-mini", debug_mode=True
     )
 
     # Create nodes
@@ -61,10 +50,8 @@ async def main():
     xml_node = ReactiveNode("xml_input", xml_input)
     csv_node = ReactiveNode("csv_input", csv_input)
     yaml_node = ReactiveNode("yaml_input", yaml_input)
-    parquet_node = ReactiveNode("parquet_input", parquet_input)
+    # parquet_node = ReactiveNode("parquet_input", parquet_input)
     detector_node = ReactiveNode("structured_data_detector", structured_data_detector)
-    approval_node = ReactiveNode("approval", approval)
-    correction_node = ReactiveNode("correction", correction)
     assistant_node = ReactiveNode("assistant", assistant)
 
     # Add nodes to the graph
@@ -76,10 +63,8 @@ async def main():
         xml_node,
         csv_node,
         yaml_node,
-        parquet_node,
+        # parquet_node,
         detector_node,
-        approval_node,
-        correction_node,
         assistant_node,
     ]:
         graph.add_node(node)
@@ -93,12 +78,10 @@ async def main():
         xml_node,
         csv_node,
         yaml_node,
-        parquet_node,
+        # parquet_node,
         detector_node,
     ]:
         graph.add_edge(ReactiveEdge(node.id, "assistant"))
-    graph.add_edge(ReactiveEdge("assistant", "approval"))
-    graph.add_edge(ReactiveEdge("assistant", "correction"))
 
     # Simulated workflow
     # Unstructured data inputs
@@ -112,7 +95,7 @@ async def main():
     )
     print("Image input result:", image_result)
 
-    cli_result = await graph.execute("cli_input", "search AI job market trends")
+    cli_result = await graph.execute("cli_input", "git commit -m 'Initial AI job market analysis'")
     print("CLI input result:", cli_result)
 
     # Structured data inputs
@@ -141,16 +124,16 @@ async def main():
     print("YAML input result:", yaml_result)
 
     # Create a sample Parquet file
-    df = pd.DataFrame(
-        {
-            "skill": ["machine_learning", "data_analysis", "natural_language_processing"],
-            "demand": ["high", "medium", "high"],
-        }
-    )
-    parquet_buffer = BytesIO()
-    df.to_parquet(parquet_buffer)
-    parquet_result = await graph.execute("parquet_input", parquet_buffer.getvalue())
-    print("Parquet input result:", parquet_result)
+    # df = pd.DataFrame(
+    #     {
+    #         "skill": ["machine_learning", "data_analysis", "natural_language_processing"],
+    #         "demand": ["high", "medium", "high"],
+    #     }
+    # )
+    # parquet_buffer = BytesIO()
+    # df.to_parquet(parquet_buffer)
+    # parquet_result = await graph.execute("parquet_input", parquet_buffer.getvalue())
+    # print("Parquet input result:", parquet_result)
 
     # Test the StructuredDataDetector
     detector_result = await graph.execute("structured_data_detector", json_data)
@@ -163,18 +146,7 @@ async def main():
     assistant_output = await graph.execute(
         "assistant", "Analyze the impact of AI on job markets based on all inputs"
     )
-
-    # Approval workflow
-    approval_result = await graph.execute("approval", assistant_output)
-    approval.submit_human_input(True)  # Simulate human approval
-    print("Approval result:", await approval_result)
-
-    # Correction workflow
-    correction_result = await graph.execute("correction", assistant_output)
-    correction.submit_human_input(
-        "Include more data on regional variations in AI job market impact"
-    )  # Simulate human correction
-    print("Correction result:", await correction_result)
+    print("Assistant output:", assistant_output)
 
 
 if __name__ == "__main__":

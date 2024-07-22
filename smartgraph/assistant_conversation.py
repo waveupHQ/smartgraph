@@ -4,7 +4,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 import litellm
-from litellm.utils import trim_messages
+from litellm.utils import get_supported_openai_params, trim_messages
 from reactivex import Observable
 from reactivex import operators as ops
 from reactivex.subject import Subject
@@ -32,6 +32,8 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
         frequency_penalty: Optional[float] = None,
         presence_penalty: Optional[float] = None,
         debug_mode: bool = False,
+        json_mode: bool = False,
+        response_schema: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(name)
         self.toolkits = toolkits or []
@@ -44,6 +46,8 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
         self.frequency_penalty = frequency_penalty
         self.presence_penalty = presence_penalty
         self.debug_mode = debug_mode
+        self.json_mode = json_mode
+        self.response_schema = response_schema
 
         self.messages = self.create_state("messages", [])
         self.context = self.create_state("context", {})
@@ -57,6 +61,11 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
                 f"Model {self.model} does not support function calling. Functions will be added to the prompt."
             )
 
+        # Check if the model supports response_format
+        self.supports_response_format = "response_format" in get_supported_openai_params(
+            model=self.model
+        )
+
     def _gather_functions(self) -> Dict[str, Any]:
         functions = {}
         for toolkit in self.toolkits:
@@ -67,8 +76,13 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
         self.toolkits.append(toolkit)
         self.available_functions.update(toolkit.functions)
 
-    async def process(self, input_data: str) -> str:
-        messages = self.messages.value + [{"role": "user", "content": input_data}]
+    async def process(self, input_data: Any) -> str:
+        if isinstance(input_data, dict):
+            input_message = {"role": "user", "content": json.dumps(input_data)}
+        else:
+            input_message = {"role": "user", "content": str(input_data)}
+
+        messages = self.messages.value + [input_message]
         context = self.context.value
         if self.debug_mode:
             logger.info(f"Processing with context: {context}")
@@ -105,6 +119,12 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
                 "frequency_penalty": self.frequency_penalty,
                 "presence_penalty": self.presence_penalty,
             }
+
+            if self.json_mode and self.supports_response_format:
+                completion_params["response_format"] = {"type": "json_object"}
+                if self.response_schema:
+                    completion_params["response_format"]["response_schema"] = self.response_schema
+                    completion_params["response_format"]["enforce_validation"] = True
 
             tools = [schema for toolkit in self.toolkits for schema in toolkit.schemas]
             if tools:
@@ -169,16 +189,7 @@ class ReactiveAssistantConversation(ReactiveAIComponent):
 
                 if self.debug_mode:
                     logger.debug("Generating final response after tool calls")
-                final_response = await litellm.acompletion(
-                    model=self.model,
-                    messages=trim_messages(messages, self.model),
-                    api_key=self.api_key,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
-                    top_p=self.top_p,
-                    frequency_penalty=self.frequency_penalty,
-                    presence_penalty=self.presence_penalty,
-                )
+                final_response = await litellm.acompletion(**completion_params)
                 if self.debug_mode:
                     logger.debug(f"Final response: {final_response}")
                 return final_response.choices[0].message["content"]

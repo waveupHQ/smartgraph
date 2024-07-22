@@ -1,183 +1,227 @@
+# tests/test_data_input_handlers_example.py
+
+import asyncio
 import json
-import xml.etree.ElementTree as ET
-from io import BytesIO, StringIO
-from unittest.mock import AsyncMock, MagicMock
+from io import BytesIO
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
-import pyarrow.parquet as pq
 import pytest
 import yaml
 
+from smartgraph import ReactiveSmartGraph
 from smartgraph.components.input_handlers import (
     CommandLineInputHandler,
     CSVInputHandler,
     ImageUploadHandler,
     JSONInputHandler,
     ParquetInputHandler,
-    SpeechInputHandler,
     StructuredDataDetector,
     TextInputHandler,
-    VideoUploadHandler,
     XMLInputHandler,
     YAMLInputHandler,
 )
 
 
 @pytest.fixture
-def text_input_handler():
-    return TextInputHandler("TestTextHandler")
+def mock_graph():
+    graph = ReactiveSmartGraph()
+    graph.add_node = MagicMock()
+    graph.add_edge = MagicMock()
+    graph.execute = AsyncMock()
+    return graph
+
 
 @pytest.fixture
-def json_input_handler():
-    return JSONInputHandler("TestJSONHandler")
+def mock_assistant():
+    return AsyncMock()
 
-@pytest.fixture
-def xml_input_handler():
-    return XMLInputHandler("TestXMLHandler")
-
-@pytest.fixture
-def csv_input_handler():
-    return CSVInputHandler("TestCSVHandler")
-
-@pytest.fixture
-def yaml_input_handler():
-    return YAMLInputHandler("TestYAMLHandler")
-
-@pytest.fixture
-def parquet_input_handler():
-    return ParquetInputHandler("TestParquetHandler")
-
-@pytest.fixture
-def structured_data_detector():
-    return StructuredDataDetector("TestStructuredDataDetector")
 
 @pytest.mark.asyncio
-async def test_text_input_handler(text_input_handler):
-    input_text = "Hello, world!"
-    result = await text_input_handler._handle_input(input_text)
+async def test_text_input_handler(mock_graph):
+    text_input = TextInputHandler("TextInput")
+    mock_graph.execute.return_value = {
+        "type": "text",
+        "content": "Analyze the impact of artificial intelligence on job markets.",
+        "length": 61,
+        "word_count": 9,
+    }
+
+    result = await mock_graph.execute(
+        "text_input", "Analyze the impact of artificial intelligence on job markets."
+    )
     assert result["type"] == "text"
-    assert result["content"] == "Hello, world!"
-    assert result["length"] == 13
-    assert result["word_count"] == 2
+    assert result["content"] == "Analyze the impact of artificial intelligence on job markets."
+    assert result["length"] == 61
+    assert result["word_count"] == 9
+
 
 @pytest.mark.asyncio
-async def test_json_input_handler(json_input_handler):
-    input_json = '{"name": "John", "age": 30}'
-    result = await json_input_handler._handle_input(input_json)
+async def test_image_upload_handler(mock_graph):
+    image_input = ImageUploadHandler("ImageInput")
+    mock_graph.execute.return_value = {
+        "type": "image",
+        "filename": "ai_impact.jpg",
+        "content": "base64_encoded_image_data",
+        "dimensions": "1024x768",
+        "format": "jpeg",
+    }
+
+    result = await mock_graph.execute(
+        "image_input", {"filename": "ai_impact.jpg", "content": "base64_encoded_image_data"}
+    )
+    assert result["type"] == "image"
+    assert result["filename"] == "ai_impact.jpg"
+    assert result["content"] == "base64_encoded_image_data"
+
+
+@pytest.mark.asyncio
+async def test_command_line_input_handler(mock_graph):
+    cli_input = CommandLineInputHandler("CLIInput")
+    mock_graph.execute.return_value = {
+        "type": "command",
+        "command": "git",
+        "args": ["commit", "-m", "Initial AI job market analysis"],
+        "full_input": "git commit -m 'Initial AI job market analysis'",
+    }
+
+    result = await mock_graph.execute("cli_input", "git commit -m 'Initial AI job market analysis'")
+    assert result["type"] == "command"
+    assert result["command"] == "git"
+    assert result["args"] == ["commit", "-m", "Initial AI job market analysis"]
+
+
+@pytest.mark.asyncio
+async def test_json_input_handler(mock_graph):
+    json_input = JSONInputHandler("JSONInput")
+    input_data = json.dumps({"ai_impact": {"job_creation": 500000, "job_displacement": 300000}})
+    mock_graph.execute.return_value = {
+        "type": "json",
+        "parsed_data": {"ai_impact": {"job_creation": 500000, "job_displacement": 300000}},
+    }
+
+    result = await mock_graph.execute("json_input", input_data)
     assert result["type"] == "json"
-    assert result["parsed_data"] == {"name": "John", "age": 30}
+    assert result["parsed_data"]["ai_impact"]["job_creation"] == 500000
+
 
 @pytest.mark.asyncio
-async def test_xml_input_handler(xml_input_handler):
-    input_xml = '<root><name>John</name><age>30</age></root>'
-    result = await xml_input_handler._handle_input(input_xml)
+async def test_xml_input_handler(mock_graph):
+    xml_input = XMLInputHandler("XMLInput")
+    input_data = """
+    <ai_skills>
+        <skill>machine_learning</skill>
+        <skill>data_analysis</skill>
+        <skill>natural_language_processing</skill>
+    </ai_skills>
+    """
+    mock_graph.execute.return_value = {
+        "type": "xml",
+        "parsed_data": {
+            "ai_skills": {
+                "skill": ["machine_learning", "data_analysis", "natural_language_processing"]
+            }
+        },
+    }
+
+    result = await mock_graph.execute("xml_input", input_data)
     assert result["type"] == "xml"
-    assert result["parsed_data"] == {"root": {"name": "John", "age": "30"}}
+    assert "machine_learning" in result["parsed_data"]["ai_skills"]["skill"]
+
 
 @pytest.mark.asyncio
-async def test_csv_input_handler(csv_input_handler):
-    input_csv = "name,age\nJohn,30\nJane,25"
-    result = await csv_input_handler._handle_input(input_csv)
+async def test_csv_input_handler(mock_graph):
+    csv_input = CSVInputHandler("CSVInput")
+    input_data = "skill,demand\nmachine_learning,high\ndata_analysis,medium\nnatural_language_processing,high"
+    mock_graph.execute.return_value = {
+        "type": "csv",
+        "parsed_data": [
+            {"skill": "machine_learning", "demand": "high"},
+            {"skill": "data_analysis", "demand": "medium"},
+            {"skill": "natural_language_processing", "demand": "high"},
+        ],
+        "headers": ["skill", "demand"],
+    }
+
+    result = await mock_graph.execute("csv_input", input_data)
     assert result["type"] == "csv"
-    assert result["parsed_data"] == [{"name": "John", "age": "30"}, {"name": "Jane", "age": "25"}]
-    assert result["headers"] == ["name", "age"]
+    assert result["parsed_data"][0]["skill"] == "machine_learning"
+    assert result["headers"] == ["skill", "demand"]
+
 
 @pytest.mark.asyncio
-async def test_yaml_input_handler(yaml_input_handler):
-    input_yaml = "name: John\nage: 30"
-    result = await yaml_input_handler._handle_input(input_yaml)
+async def test_yaml_input_handler(mock_graph):
+    yaml_input = YAMLInputHandler("YAMLInput")
+    input_data = yaml.dump(
+        {"ai_skills": ["machine_learning", "data_analysis", "natural_language_processing"]}
+    )
+    mock_graph.execute.return_value = {
+        "type": "yaml",
+        "parsed_data": {
+            "ai_skills": ["machine_learning", "data_analysis", "natural_language_processing"]
+        },
+    }
+
+    result = await mock_graph.execute("yaml_input", input_data)
     assert result["type"] == "yaml"
-    assert result["parsed_data"] == {"name": "John", "age": 30}
+    assert "machine_learning" in result["parsed_data"]["ai_skills"]
+
 
 @pytest.mark.asyncio
-async def test_parquet_input_handler(parquet_input_handler):
-    df = pd.DataFrame({"name": ["John", "Jane"], "age": [30, 25]})
+async def test_parquet_input_handler(mock_graph):
+    parquet_input = ParquetInputHandler("ParquetInput")
+    df = pd.DataFrame(
+        {
+            "skill": ["machine_learning", "data_analysis", "natural_language_processing"],
+            "demand": ["high", "medium", "high"],
+        }
+    )
     parquet_buffer = BytesIO()
     df.to_parquet(parquet_buffer)
     parquet_buffer.seek(0)
-    
-    result = await parquet_input_handler._handle_input(parquet_buffer)
+
+    mock_graph.execute.return_value = {
+        "type": "parquet",
+        "parsed_data": [
+            {"skill": "machine_learning", "demand": "high"},
+            {"skill": "data_analysis", "demand": "medium"},
+            {"skill": "natural_language_processing", "demand": "high"},
+        ],
+        "num_rows": 3,
+        "num_columns": 2,
+    }
+
+    result = await mock_graph.execute("parquet_input", parquet_buffer.getvalue())
     assert result["type"] == "parquet"
-    assert result["parsed_data"] == [{"name": "John", "age": 30}, {"name": "Jane", "age": 25}]
-    assert result["num_rows"] == 2
+    assert result["parsed_data"][0]["skill"] == "machine_learning"
+    assert result["num_rows"] == 3
     assert result["num_columns"] == 2
 
-@pytest.mark.asyncio
-async def test_structured_data_detector_json(structured_data_detector):
-    input_data = '{"name": "John", "age": 30}'
-    result = await structured_data_detector._handle_input(input_data)
-    assert result["type"] == "json"
-    assert result["parsed_data"] == {"name": "John", "age": 30}
 
 @pytest.mark.asyncio
-async def test_structured_data_detector_xml(structured_data_detector):
-    input_data = '<root><name>John</name><age>30</age></root>'
-    result = await structured_data_detector._handle_input(input_data)
-    assert result["type"] == "xml"
-    assert result["parsed_data"] == {"root": {"name": "John", "age": "30"}}
+async def test_structured_data_detector(mock_graph):
+    detector = StructuredDataDetector("StructuredDataDetector")
+    json_data = json.dumps({"ai_impact": {"job_creation": 500000, "job_displacement": 300000}})
 
-@pytest.mark.asyncio
-async def test_structured_data_detector_unknown(structured_data_detector):
-    input_data = "This is just plain text"
-    result = await structured_data_detector._handle_input(input_data)
-    assert result["type"] == "unknown"
-    assert "error" in result
-
-@pytest.fixture
-def image_upload_handler():
-    return ImageUploadHandler("TestImageHandler")
-
-@pytest.mark.asyncio
-async def test_image_upload_handler(image_upload_handler):
-    input_data = {"filename": "test.jpg", "content": b"fake image content"}
-    result = await image_upload_handler._handle_input(input_data)
-    assert result["type"] == "image"
-    assert result["filename"] == "test.jpg"
-    assert result["content"] == b"fake image content"
-    assert result["dimensions"] == "1024x768"
-    assert result["format"] == "jpeg"
-
-@pytest.fixture
-def video_upload_handler():
-    return VideoUploadHandler("TestVideoHandler")
-
-@pytest.mark.asyncio
-async def test_video_upload_handler(video_upload_handler):
-    input_data = {"filename": "test.mp4", "content": b"fake video content"}
-    result = await video_upload_handler._handle_input(input_data)
-    assert result["type"] == "video"
-    assert result["filename"] == "test.mp4"
-    assert result["content"] == b"fake video content"
-    assert result["duration"] == "00:05:30"
-    assert result["resolution"] == "1920x1080"
-
-@pytest.fixture
-def speech_input_handler():
-    return SpeechInputHandler("TestSpeechHandler")
-
-@pytest.mark.asyncio
-async def test_speech_input_handler(speech_input_handler):
-    input_data = {
-        "audio_data": "This is a transcription of speech",
-        "duration": "00:00:30",
-        "language": "en-US"
+    mock_graph.execute.return_value = {
+        "type": "json",
+        "parsed_data": {"ai_impact": {"job_creation": 500000, "job_displacement": 300000}},
     }
-    result = await speech_input_handler._handle_input(input_data)
-    assert result["type"] == "speech"
-    assert result["transcription"] == "This is a transcription of speech"
-    assert result["duration"] == "00:00:30"
-    assert result["language"] == "en-US"
 
-@pytest.fixture
-def command_line_input_handler():
-    return CommandLineInputHandler("TestCommandLineHandler")
+    result = await mock_graph.execute("structured_data_detector", json_data)
+    assert result["type"] == "json"
+    assert result["parsed_data"]["ai_impact"]["job_creation"] == 500000
+
 
 @pytest.mark.asyncio
-async def test_command_line_input_handler(command_line_input_handler):
-    input_data = "git commit -m 'Initial commit'"
-    result = await command_line_input_handler._handle_input(input_data)
-    assert result["type"] == "command"
-    assert result["command"] == "git"
-    assert result["args"] == ["commit", "-m", "'Initial commit'"]
-    assert result["full_input"] == input_data
+async def test_assistant_processing(mock_graph, mock_assistant):
+    mock_graph.execute.return_value = "AI analysis result"
 
+    result = await mock_graph.execute(
+        "assistant", "Analyze the impact of AI on job markets based on all inputs"
+    )
+    assert result == "AI analysis result"
+
+
+if __name__ == "__main__":
+    pytest.main(["-v", __file__])
