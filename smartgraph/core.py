@@ -12,7 +12,7 @@ from reactivex.subject import BehaviorSubject, Subject  # noqa: F811
 
 from .component import ReactiveAIComponent
 from .components import AggregatorComponent
-from .exceptions import GraphStructureError
+from .exceptions import ExecutionError, GraphStructureError
 from .logging import SmartGraphLogger
 
 logger = SmartGraphLogger.get_logger()
@@ -127,6 +127,8 @@ class ReactiveSmartGraph:
     def add_node(self, node: ReactiveNode) -> None:
         if node.id in self.nodes:
             raise GraphStructureError(f"Node with id '{node.id}' already exists in the graph")
+        if node.state_manager is None:
+            node.state_manager = self.state_manager
         self.nodes[node.id] = node
         self.graph.add_node(node.id)
         node.output.subscribe(self.global_output)
@@ -182,6 +184,10 @@ class ReactiveSmartGraph:
             self.state_manager.update_global_state({"execution_result": final_result})
 
             return final_result
+        except ValueError as e:
+            logger.error(f"Execution failed: {str(e)}")
+            raise ExecutionError(  # noqa: B904
+                f"Error during execution: {str(e)}", node_id=start_node_id)  # noqa: B904
         except asyncio.TimeoutError:
             logger.error("Execution timed out")
             raise

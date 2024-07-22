@@ -5,7 +5,7 @@ from .component import ReactiveAIComponent
 
 # Import all components
 from .components import *  # noqa: F403
-from .core import ReactiveEdge, ReactiveNode, ReactiveSmartGraph
+from .core import ReactiveEdge, ReactiveNode, ReactiveSmartGraph, StateManager
 from .exceptions import (
     ConfigurationError,
     ExecutionError,
@@ -19,6 +19,7 @@ from .logging import SmartGraphLogger
 # List of core classes
 __core_classes__ = [
     "ReactiveAIComponent",
+    "StateManager",
     "ReactiveNode",
     "ReactiveEdge",
     "ReactiveSmartGraph",
