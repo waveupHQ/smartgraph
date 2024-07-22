@@ -1,11 +1,14 @@
 # smartgraph/components/human_in_the_loop.py
 
+import asyncio
 from typing import Any, Dict, Optional
 
 from reactivex import Observable, Subject
 
 from smartgraph import ReactiveAIComponent
+from smartgraph.logging import SmartGraphLogger
 
+logger = SmartGraphLogger.get_logger()
 
 class HumanInTheLoopComponent(ReactiveAIComponent):
     def __init__(self, name: str):
@@ -13,41 +16,63 @@ class HumanInTheLoopComponent(ReactiveAIComponent):
         self.human_input_subject = Subject()
         self.system_output_subject = Subject()
         self.final_output_subject = Subject()
+        self.human_input_event = asyncio.Event()
+        self.human_input_value = None
 
     async def process(self, input_data: Any) -> Any:
-        # Process the input and generate system output
-        system_output = await self._generate_system_output(input_data)
-        self.system_output_subject.on_next(system_output)
+        try:
+            system_output = await self._generate_system_output(input_data)
+            self.system_output_subject.on_next(system_output)
 
-        # Wait for human input
-        human_input = await self._get_human_input(system_output)
+            human_input = await self._get_human_input(system_output)
+            if human_input is None:
+                return {"error": "Timeout waiting for human input"}
 
-        # Process the human input and generate final output
-        final_output = await self._process_human_input(human_input, system_output)
-        self.final_output_subject.on_next(final_output)
-
-        return final_output
+            final_output = await self._process_human_input(human_input, system_output)
+            self.final_output_subject.on_next(final_output)
+            return final_output
+        except Exception as e:
+            error_message = f"Error in {self.name} process: {str(e)}"
+            logger.error(error_message)
+            return {"error": error_message}
 
     async def _generate_system_output(self, input_data: Any) -> Any:
         # Implement system logic here
         raise NotImplementedError
 
-    async def _get_human_input(self, system_output: Any) -> Any:
-        # Wait for human input
-        return await self.human_input_subject.first().to_future()
+    async def _get_human_input(self, system_output: Any, timeout: float = 60.0) -> Any:
+        self.human_input_event.clear()
+        self.human_input_value = None
+
+        try:
+            await asyncio.wait_for(self.human_input_event.wait(), timeout=timeout)
+            return self.human_input_value
+        except asyncio.TimeoutError:
+            return None
 
     async def _process_human_input(self, human_input: Any, system_output: Any) -> Any:
         # Process human input and generate final output
         raise NotImplementedError
 
     def submit_human_input(self, input_data: Any):
+        self.human_input_value = input_data
+        self.human_input_event.set()
         self.human_input_subject.on_next(input_data)
 
     def get_system_output_observable(self) -> Observable:
-        return self.system_output_subject.asObservable()
+        return self.system_output_subject
 
     def get_final_output_observable(self) -> Observable:
-        return self.final_output_subject.asObservable()
+        return self.final_output_subject
+    async def _get_human_input(self, system_output: Any, timeout: float = 60.0) -> Any:
+            self.human_input_event.clear()
+            self.human_input_value = None
+
+            try:
+                await asyncio.wait_for(self.human_input_event.wait(), timeout=timeout)
+                return self.human_input_value
+            except asyncio.TimeoutError:
+                return None
 
 
 class BasicApprovalComponent(HumanInTheLoopComponent):
@@ -105,17 +130,29 @@ class IterativeFeedbackComponent(HumanInTheLoopComponent):
             "iteration": new_iteration,
             "output": f"Refined output (iteration {new_iteration}): {human_input['feedback']}",
         }
-
     async def process(self, input_data: Any) -> Any:
-        system_output = await self._generate_system_output(input_data)
-        while True:
-            self.system_output_subject.on_next(system_output)
-            human_input = await self._get_human_input(system_output)
-            if human_input.get("complete", False):
-                break
-            system_output = await self._process_human_input(human_input, system_output)
-        self.final_output_subject.on_next(system_output)
-        return system_output
+        try:
+            system_output = await self._generate_system_output(input_data)
+            iteration = 1
+            while True:
+                self.system_output_subject.on_next(system_output)
+                human_input = await self._get_human_input(system_output)
+                if human_input is None:
+                    return {"error": "No human input received"}
+                if human_input.get("complete", False):
+                    break
+                system_output = await self._process_human_input(human_input, system_output)
+                iteration += 1
+            final_output = {
+                "iteration": iteration,
+                "output": f"Refined output (iteration {iteration}): {human_input['feedback']}"
+            }
+            self.final_output_subject.on_next(final_output)
+            return final_output
+        except Exception as e:
+            error_message = f"Error in {self.name} process: {str(e)}"
+            logger.error(error_message)
+            return {"error": error_message}
 
 
 # Additional components can be implemented for other patterns...
