@@ -31,8 +31,6 @@ def mock_component():
     return component
 
 
-
-
 class TestStateManager:
     @pytest.fixture
     def state_manager(self):
@@ -52,12 +50,14 @@ class TestStateManager:
         combined_state = state_manager.get_combined_state("node1")
         assert combined_state == {"global_key": "global_value", "node_key": "node_value"}
 
+
 class TestReactiveNode:
     @pytest.fixture
     def simple_component(self):
         class SimpleComponent(ReactiveAIComponent):
             async def process(self, input_data):
                 return f"Processed: {input_data}"
+
         return SimpleComponent("SimpleComponent")
 
     @pytest.fixture
@@ -105,6 +105,7 @@ class TestReactiveNode:
         node_without_state.update_state({"test_key": "test_value"})
         assert node_without_state.get_state() is None
 
+
 class TestReactiveSmartGraph:
     @pytest.fixture
     def graph(self):
@@ -115,6 +116,7 @@ class TestReactiveSmartGraph:
         class SimpleComponent(ReactiveAIComponent):
             async def process(self, input_data):
                 return f"Processed: {input_data}"
+
         return SimpleComponent("SimpleComponent")
 
     def test_add_node(self, graph, simple_component):
@@ -197,8 +199,15 @@ class TestReactiveSmartGraph:
         assert "node_key" not in node2_state
 
         # Check that state changes were logged
-        assert any("State change: ('global', {'global_key': 'global_value'})" in record.message for record in caplog.records)
-        assert any("State change: ('node1', {'node_key': 'node_value'})" in record.message for record in caplog.records)
+        assert any(
+            "State change: ('global', {'global_key': 'global_value'})" in record.message
+            for record in caplog.records
+        )
+        assert any(
+            "State change: ('node1', {'node_key': 'node_value'})" in record.message
+            for record in caplog.records
+        )
+
 
 class TestReactiveEdge:
     def test_edge_condition_true(self):

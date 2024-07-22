@@ -187,7 +187,8 @@ class ReactiveSmartGraph:
         except ValueError as e:
             logger.error(f"Execution failed: {str(e)}")
             raise ExecutionError(  # noqa: B904
-                f"Error during execution: {str(e)}", node_id=start_node_id)  # noqa: B904
+                f"Error during execution: {str(e)}", node_id=start_node_id
+            )  # noqa: B904
         except asyncio.TimeoutError:
             logger.error("Execution timed out")
             raise

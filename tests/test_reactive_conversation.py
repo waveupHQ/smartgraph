@@ -14,6 +14,7 @@ def mock_litellm():
         mock.acompletion = AsyncMock()
         yield mock
 
+
 @pytest.fixture
 def mock_duckduckgo_toolkit():
     toolkit = MagicMock(spec=DuckDuckGoToolkit)
@@ -21,6 +22,7 @@ def mock_duckduckgo_toolkit():
         return_value='{"results": [{"title": "Test", "body": "This is a test result"}]}'
     )
     return toolkit
+
 
 @pytest.mark.asyncio
 async def test_conversation_flow_and_context(mock_litellm):
@@ -61,7 +63,13 @@ async def test_toolkit_integration_no_function_call(mock_litellm, mock_duckduckg
     )
 
     mock_litellm.acompletion.return_value = MagicMock(
-        choices=[MagicMock(message={"content": "Python is a high-level, interpreted programming language known for its simplicity and readability."})]
+        choices=[
+            MagicMock(
+                message={
+                    "content": "Python is a high-level, interpreted programming language known for its simplicity and readability."
+                }
+            )
+        ]
     )
 
     response = await assistant.process("What is Python?")
