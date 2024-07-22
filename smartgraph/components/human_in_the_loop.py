@@ -10,6 +10,7 @@ from smartgraph.logging import SmartGraphLogger
 
 logger = SmartGraphLogger.get_logger()
 
+
 class HumanInTheLoopComponent(ReactiveAIComponent):
     def __init__(self, name: str):
         super().__init__(name)
@@ -64,15 +65,16 @@ class HumanInTheLoopComponent(ReactiveAIComponent):
 
     def get_final_output_observable(self) -> Observable:
         return self.final_output_subject
-    async def _get_human_input(self, system_output: Any, timeout: float = 60.0) -> Any:
-            self.human_input_event.clear()
-            self.human_input_value = None
 
-            try:
-                await asyncio.wait_for(self.human_input_event.wait(), timeout=timeout)
-                return self.human_input_value
-            except asyncio.TimeoutError:
-                return None
+    async def _get_human_input(self, system_output: Any, timeout: float = 60.0) -> Any:
+        self.human_input_event.clear()
+        self.human_input_value = None
+
+        try:
+            await asyncio.wait_for(self.human_input_event.wait(), timeout=timeout)
+            return self.human_input_value
+        except asyncio.TimeoutError:
+            return None
 
 
 class BasicApprovalComponent(HumanInTheLoopComponent):
@@ -130,6 +132,7 @@ class IterativeFeedbackComponent(HumanInTheLoopComponent):
             "iteration": new_iteration,
             "output": f"Refined output (iteration {new_iteration}): {human_input['feedback']}",
         }
+
     async def process(self, input_data: Any) -> Any:
         try:
             system_output = await self._generate_system_output(input_data)
@@ -145,7 +148,7 @@ class IterativeFeedbackComponent(HumanInTheLoopComponent):
                 iteration += 1
             final_output = {
                 "iteration": iteration,
-                "output": f"Refined output (iteration {iteration}): {human_input['feedback']}"
+                "output": f"Refined output (iteration {iteration}): {human_input['feedback']}",
             }
             self.final_output_subject.on_next(final_output)
             return final_output

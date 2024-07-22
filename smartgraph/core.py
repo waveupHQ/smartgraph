@@ -176,7 +176,7 @@ class ReactiveSmartGraph:
 
         try:
             final_result = await asyncio.wait_for(
-                traverse_graph(start_node_id, input_data), timeout=30
+                traverse_graph(start_node_id, input_data), timeout=60
             )
             logger.info(f"Execution completed. Final result: {final_result}")
 

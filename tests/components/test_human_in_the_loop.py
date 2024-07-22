@@ -17,6 +17,7 @@ from smartgraph.components.human_in_the_loop import (
 def human_in_the_loop():
     return BasicApprovalComponent("test_component")
 
+
 class TestHumanInTheLoopComponent:
     @pytest.mark.asyncio
     async def test_submit_human_input(self, human_in_the_loop):
@@ -35,17 +36,20 @@ class TestHumanInTheLoopComponent:
 
     @pytest.mark.asyncio
     async def test_get_human_input_timeout(self, human_in_the_loop):
-        with patch.object(human_in_the_loop, '_get_human_input', return_value=None):
+        with patch.object(human_in_the_loop, "_get_human_input", return_value=None):
             result = await human_in_the_loop.process("Test input")
             assert result is not None
             assert "error" in result
 
     @pytest.mark.asyncio
     async def test_process_error_handling(self, human_in_the_loop):
-        with patch.object(human_in_the_loop, '_generate_system_output', side_effect=Exception("Test error")):
+        with patch.object(
+            human_in_the_loop, "_generate_system_output", side_effect=Exception("Test error")
+        ):
             result = await human_in_the_loop.process("Test input")
             assert "error" in result
             assert "Test error" in result["error"]
+
 
 class TestBasicApprovalComponent:
     @pytest.fixture
@@ -74,11 +78,16 @@ class TestBasicApprovalComponent:
         assert result == {"status": "rejected", "action": None}
 
     @pytest.mark.asyncio
-    async def test_process_error_handling(self, basic_approval):  # or basic_approval, correction_refinement, etc.
-        with patch.object(basic_approval, '_generate_system_output', side_effect=Exception("Test error")):
+    async def test_process_error_handling(
+        self, basic_approval
+    ):  # or basic_approval, correction_refinement, etc.
+        with patch.object(
+            basic_approval, "_generate_system_output", side_effect=Exception("Test error")
+        ):
             result = await basic_approval.process("Test input")
             assert "error" in result
             assert "Test error" in result["error"]
+
 
 class TestCorrectionRefinementComponent:
     @pytest.fixture
@@ -97,12 +106,16 @@ class TestCorrectionRefinementComponent:
         system_output = "Initial output"
         result = await correction_refinement._process_human_input(human_input, system_output)
         assert result == "Refined output: Corrected output"
+
     @pytest.mark.asyncio
     async def test_process_error_handling(self, correction_refinement):
-            with patch.object(correction_refinement, '_generate_system_output', side_effect=Exception("Test error")):
-                result = await correction_refinement.process("Test input")
-                assert "error" in result
-                assert "Test error" in result["error"]
+        with patch.object(
+            correction_refinement, "_generate_system_output", side_effect=Exception("Test error")
+        ):
+            result = await correction_refinement.process("Test input")
+            assert "error" in result
+            assert "Test error" in result["error"]
+
 
 class TestGuidedDecisionMakingComponent:
     @pytest.fixture
@@ -116,7 +129,12 @@ class TestGuidedDecisionMakingComponent:
         assert isinstance(result, dict)
         assert "options" in result
         assert len(result["options"]) == 2
-        assert all(["name" in option and "pros" in option and "cons" in option for option in result["options"]])
+        assert all(
+            [
+                "name" in option and "pros" in option and "cons" in option
+                for option in result["options"]
+            ]
+        )
 
     @pytest.mark.asyncio
     async def test_process_human_input(self, guided_decision):
@@ -128,13 +146,21 @@ class TestGuidedDecisionMakingComponent:
             ]
         }
         result = await guided_decision._process_human_input(human_input, system_output)
-        assert result == {"selected_option": "Option A", "original_options": system_output["options"]}
+        assert result == {
+            "selected_option": "Option A",
+            "original_options": system_output["options"],
+        }
+
     @pytest.mark.asyncio
     async def test_process_error_handling(self, guided_decision):
-            with patch.object(guided_decision, '_generate_system_output', side_effect=Exception("Test error")):
-                result = await guided_decision.process("Test input")
-                assert "error" in result
-                assert "Test error" in result["error"]
+        with patch.object(
+            guided_decision, "_generate_system_output", side_effect=Exception("Test error")
+        ):
+            result = await guided_decision.process("Test input")
+            assert "error" in result
+            assert "Test error" in result["error"]
+
+
 class TestIterativeFeedbackComponent:
     @pytest.fixture
     def iterative_feedback(self):
@@ -170,7 +196,7 @@ class TestIterativeFeedbackComponent:
         human_inputs = [
             {"feedback": "First iteration"},
             {"feedback": "Second iteration"},
-            {"feedback": "Final iteration", "complete": True}
+            {"feedback": "Final iteration", "complete": True},
         ]
 
         async def simulate_human_input():
@@ -187,25 +213,31 @@ class TestIterativeFeedbackComponent:
 
     @pytest.mark.asyncio
     async def test_process_error_handling(self, iterative_feedback):
-        with patch.object(iterative_feedback, '_generate_system_output', side_effect=Exception("Test error")):
+        with patch.object(
+            iterative_feedback, "_generate_system_output", side_effect=Exception("Test error")
+        ):
             result = await iterative_feedback.process("Test input")
             assert "error" in result
             assert "Test error" in result["error"]
             assert "Error in" in result["error"]
 
 
-@pytest.mark.parametrize("component_class", [
-    BasicApprovalComponent,
-    CorrectionRefinementComponent,
-    GuidedDecisionMakingComponent,
-    IterativeFeedbackComponent
-])
+@pytest.mark.parametrize(
+    "component_class",
+    [
+        BasicApprovalComponent,
+        CorrectionRefinementComponent,
+        GuidedDecisionMakingComponent,
+        IterativeFeedbackComponent,
+    ],
+)
 def test_reactive_ai_component_integration(component_class):
     component = component_class("test")
     assert isinstance(component, ReactiveAIComponent)
-    assert hasattr(component, 'input')
-    assert hasattr(component, 'output')
+    assert hasattr(component, "input")
+    assert hasattr(component, "output")
     assert callable(component.process)
+
 
 @pytest.mark.asyncio
 async def test_async_workflow(human_in_the_loop):
