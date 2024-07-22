@@ -2,6 +2,9 @@
 
 from .assistant_conversation import ReactiveAssistantConversation
 from .component import ReactiveAIComponent
+
+# Import all components
+from .components import *  # noqa: F403
 from .core import ReactiveEdge, ReactiveNode, ReactiveSmartGraph
 from .exceptions import (
     ConfigurationError,
@@ -13,7 +16,8 @@ from .exceptions import (
 )
 from .logging import SmartGraphLogger
 
-__all__ = [
+# List of core classes
+__core_classes__ = [
     "ReactiveAIComponent",
     "ReactiveNode",
     "ReactiveEdge",
@@ -26,6 +30,38 @@ __all__ = [
     "ValidationError",
     "MemoryError",
     "GraphStructureError",
+]
+
+# Combine core classes and components
+__all__ = __core_classes__ + [
+    "AggregatorComponent",
+    "FilterComponent",
+    "TransformerComponent",
+    "BranchingComponent",
+    "AsyncAPIComponent",
+    "RetryComponent",
+    "CacheComponent",
+    "ValidationComponent",
+    "BaseInputHandler",
+    "UnstructuredDataInputHandler",
+    "StructuredDataInputHandler",
+    "TextInputHandler",
+    "FileUploadHandler",
+    "ImageUploadHandler",
+    "VideoUploadHandler",
+    "SpeechInputHandler",
+    "CommandLineInputHandler",
+    "JSONInputHandler",
+    "XMLInputHandler",
+    "CSVInputHandler",
+    "YAMLInputHandler",
+    "ParquetInputHandler",
+    "StructuredDataDetector",
+    "HumanInTheLoopComponent",
+    "BasicApprovalComponent",
+    "CorrectionRefinementComponent",
+    "GuidedDecisionMakingComponent",
+    "IterativeFeedbackComponent",
 ]
 
 __version__ = "0.2.0"

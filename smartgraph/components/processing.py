@@ -1,9 +1,9 @@
-# smartgraph/components.py
+# smartgraph/components/processing.py
 
 import asyncio
 from typing import Any, Callable, Dict, List
 
-from .component import ReactiveAIComponent
+from smartgraph import ReactiveAIComponent
 
 
 class AggregatorComponent(ReactiveAIComponent):
