@@ -1,116 +1,174 @@
 # smartgraph/core.py
 
-from __future__ import annotations
-
+import asyncio
 from typing import Any, Dict, List, Optional
 
-import networkx as nx
-from reactivex import Observable, Subject
-from reactivex import operators as ops
-from reactivex.subject import BehaviorSubject, Subject  # noqa: F811
+from reactivex import Observable
+from reactivex.subject import BehaviorSubject, Subject
 
-from .component import ReactiveAIComponent
-from .exceptions import ExecutionError, GraphStructureError
+from .exceptions import ConfigurationError, ExecutionError
 from .logging import SmartGraphLogger
 
 logger = SmartGraphLogger.get_logger()
 
 
-class StateManager:
+class ReactiveComponent:
+    def __init__(self, name: str):
+        self.name = name
+        self._states: Dict[str, BehaviorSubject] = {}
+        self.input: Subject = Subject()
+        self.output: Subject = Subject()
+        self.error: Subject = Subject()
+
+        self.input.subscribe(self._process_input)
+
+    def _process_input(self, input_data: Any):
+        logger.debug(f"{self.name} received input: {input_data}")
+        try:
+            result = self.process(input_data)
+            logger.debug(f"{self.name} processed input. Result: {result}")
+            self.output.on_next(result)
+        except Exception as e:
+            logger.error(f"{self.name} failed to process input: {e}")
+            self.error.on_next(e)
+
+    def create_state(self, key: str, initial_value: Any) -> BehaviorSubject:
+        if key not in self._states:
+            self._states[key] = BehaviorSubject(initial_value)
+        return self._states[key]
+
+    def get_state(self, key: str) -> Optional[BehaviorSubject]:
+        return self._states.get(key)
+
+    def update_state(self, key: str, value: Any) -> None:
+        if key in self._states:
+            self._states[key].on_next(value)
+
+    def process(self, input_data: Any) -> Any:
+        raise NotImplementedError("Subclasses must implement process method")
+
+
+class Pipeline:
+    def __init__(self, name: str):
+        self.name = name
+        self.components: Dict[str, ReactiveComponent] = {}
+        self.connections: Dict[str, List[str]] = {}
+        self.input = Subject()
+        self.output = Subject()
+        self.error = Subject()
+
+    def add_component(self, component: ReactiveComponent):
+        if component.name in self.components:
+            raise ConfigurationError(
+                f"Component {component.name} already exists in pipeline {self.name}"
+            )
+        self.components[component.name] = component
+        self.connections[component.name] = []
+        logger.info(f"Added component {component.name} to pipeline {self.name}")
+
+    def connect_components(self, source: str, target: str):
+        if source not in self.components or target not in self.components:
+            raise ConfigurationError(
+                f"Invalid connection: {source} -> {target} in pipeline {self.name}"
+            )
+        self.connections[source].append(target)
+        logger.info(f"Connected {source} to {target} in pipeline {self.name}")
+
+    def compile(self):
+        for source, targets in self.connections.items():
+            source_component = self.components[source]
+            for target in targets:
+                target_component = self.components[target]
+                source_component.output.subscribe(
+                    target_component.input, lambda error: self.error.on_next(error)
+                )
+
+        first_component = next(iter(self.components.values()))
+        self.input.subscribe(first_component.input)
+
+        last_component = list(self.components.values())[-1]
+        last_component.output.subscribe(self.output)
+
+        logger.info(f"Compiled pipeline {self.name}")
+
+    def execute(self, input_data: Any) -> Observable:
+        result_subject = Subject()
+
+        def on_next(x):
+            result_subject.on_next(x)
+
+        def on_error(error):
+            result_subject.on_error(error)
+
+        def on_completed():
+            result_subject.on_completed()
+
+        self.output.subscribe(on_next, on_error, on_completed)
+        self.input.on_next(input_data)
+
+        return result_subject
+
+
+class ReactiveSmartGraph:
     def __init__(self):
-        self._global_state = BehaviorSubject({})
-        self._node_states: Dict[str, BehaviorSubject] = {}
-        self._state_change_subject = Subject()
+        self.pipelines: Dict[str, Pipeline] = {}
+        self.connections: Dict[str, Dict[str, List[Dict[str, str]]]] = {}
 
-    def get_global_state(self) -> BehaviorSubject:
-        return self._global_state
+    def create_pipeline(self, name: str) -> Pipeline:
+        if name in self.pipelines:
+            raise ConfigurationError(f"Pipeline {name} already exists")
+        pipeline = Pipeline(name)
+        self.pipelines[name] = pipeline
+        self.connections[name] = {}
+        logger.info(f"Created pipeline {name}")
+        return pipeline
 
-    def update_global_state(self, update: Dict[str, Any]):
-        current_state = self._global_state.value
-        new_state = {**current_state, **update}
-        self._global_state.on_next(new_state)
-        self._state_change_subject.on_next(("global", update))
-        logger.info(f"Global state updated: {update}")
-
-    def get_node_state(self, node_id: str) -> BehaviorSubject:
-        if node_id not in self._node_states:
-            self._node_states[node_id] = BehaviorSubject({})
-        return self._node_states[node_id]
-
-    def update_node_state(self, node_id: str, update: Dict[str, Any]):
-        if node_id not in self._node_states:
-            self._node_states[node_id] = BehaviorSubject({})
-        current_state = self._node_states[node_id].value
-        new_state = {**current_state, **update}
-        self._node_states[node_id].on_next(new_state)
-        self._state_change_subject.on_next((node_id, update))
-        logger.info(f"Node {node_id} state updated: {update}")
-
-    def get_state_changes(self) -> Subject:
-        return self._state_change_subject
-
-    def get_combined_state(self, node_id: Optional[str] = None) -> Dict[str, Any]:
-        global_state = self._global_state.value
-        if node_id is None:
-            return global_state
-        node_state = self._node_states.get(node_id, BehaviorSubject({})).value
-        return {**global_state, **node_state}
-
-
-class ReactiveNode:
-    def __init__(
+    def connect_components(
         self,
-        id: str,
-        component: ReactiveAIComponent,
-        requires_approval: bool = False,
-        requires_input: bool = False,
-        state_manager: Optional["StateManager"] = None,
+        source_pipeline: str,
+        source_component: str,
+        target_pipeline: str,
+        target_component: str,
     ):
-        self.id = id
-        self.component = component
-        self.input = component.input
-        self.output = component.output
-        self.requires_approval = requires_approval
-        self.requires_input = requires_input
-        self.state_manager = state_manager
-        self.state = self.state_manager.get_node_state(self.id) if self.state_manager else None
+        if source_pipeline not in self.pipelines or target_pipeline not in self.pipelines:
+            raise ConfigurationError(
+                f"Invalid pipeline connection: {source_pipeline} -> {target_pipeline}"
+            )
 
-        # Set up logging for input and output
-        self.input.subscribe(
-            on_next=lambda x: logger.debug(f"Node {self.id} received input: {x}"),
-            on_error=lambda e: logger.error(f"Node {self.id} input error: {e}"),
+        if source_pipeline not in self.connections:
+            self.connections[source_pipeline] = {}
+
+        if source_component not in self.connections[source_pipeline]:
+            self.connections[source_pipeline][source_component] = []
+
+        self.connections[source_pipeline][source_component].append(
+            {"target_pipeline": target_pipeline, "target_component": target_component}
         )
-        self.output.subscribe(
-            on_next=lambda x: logger.debug(f"Node {self.id} produced output: {x}"),
-            on_error=lambda e: logger.error(f"Node {self.id} output error: {e}"),
+        logger.info(
+            f"Connected {source_pipeline}.{source_component} to {target_pipeline}.{target_component}"
         )
 
-    async def process(self, input_data: Any) -> Any:
-        if self.state_manager:
-            # Update node state with input data
-            self.state_manager.update_node_state(self.id, {"last_input": input_data})
+    def compile(self):
+        for pipeline in self.pipelines.values():
+            pipeline.compile()
 
-        result = await self.component.process(input_data)
+        for source_pipeline, source_connections in self.connections.items():
+            for source_component, targets in source_connections.items():
+                source = self.pipelines[source_pipeline].components[source_component]
+                for target in targets:
+                    target_pipeline = self.pipelines[target["target_pipeline"]]
+                    target_component = target_pipeline.components[target["target_component"]]
+                    source.output.subscribe(
+                        target_component.input,
+                        lambda error: logger.error(
+                            f"Error in connection {source_pipeline}.{source_component} -> {target['target_pipeline']}.{target['target_component']}: {error}"
+                        ),
+                    )
 
-        if self.state_manager:
-            # Update node state with output data
-            self.state_manager.update_node_state(self.id, {"last_output": result})
+        logger.info("Compiled ReactiveSmartGraph")
 
-        return result
+    def execute(self, pipeline_name: str, input_data: Any) -> Observable:
+        if pipeline_name not in self.pipelines:
+            raise ConfigurationError(f"Pipeline {pipeline_name} does not exist")
 
-    def get_state(self) -> Optional[Dict[str, Any]]:
-        return self.state_manager.get_combined_state(self.id) if self.state_manager else None
-
-    def update_state(self, update: Dict[str, Any]):
-        if self.state_manager:
-            self.state_manager.update_node_state(self.id, update)
-
-
-class ReactiveEdge:
-    def __init__(self, source_id: str, target_id: str, condition: Optional[callable] = None):
-        self.source_id = source_id
-        self.target_id = target_id
-        self.condition = condition or (lambda _: True)
-
-    def is_valid(self, data: Any) -> bool:
-        return self.condition(data)
+        return self.pipelines[pipeline_name].execute(input_data)

@@ -3,16 +3,16 @@
 import asyncio
 from typing import Any, Callable, Dict, List
 
-from smartgraph import ReactiveAIComponent
+from smartgraph import ReactiveComponent
 
 
-class AggregatorComponent(ReactiveAIComponent):
+class AggregatorComponent(ReactiveComponent):
     async def process(self, input_data: List[Any]) -> Any:
         await asyncio.sleep(0.1)
         return f"Aggregated result: {' AND '.join(str(item) for item in input_data)}"
 
 
-class FilterComponent(ReactiveAIComponent):
+class FilterComponent(ReactiveComponent):
     def __init__(self, name: str, condition: Callable[[Any], bool]):
         super().__init__(name)
         self.condition = condition
@@ -24,7 +24,7 @@ class FilterComponent(ReactiveAIComponent):
         return None
 
 
-class TransformerComponent(ReactiveAIComponent):
+class TransformerComponent(ReactiveComponent):
     def __init__(self, name: str, transform_func: Callable[[Any], Any]):
         super().__init__(name)
         self.transform_func = transform_func
@@ -34,7 +34,7 @@ class TransformerComponent(ReactiveAIComponent):
         return self.transform_func(input_data)
 
 
-class BranchingComponent(ReactiveAIComponent):
+class BranchingComponent(ReactiveComponent):
     def __init__(self, name: str, condition: Callable[[Any], bool]):
         super().__init__(name)
         self.condition = condition
@@ -47,7 +47,7 @@ class BranchingComponent(ReactiveAIComponent):
             return {"false_branch": input_data}
 
 
-class AsyncAPIComponent(ReactiveAIComponent):
+class AsyncAPIComponent(ReactiveComponent):
     def __init__(self, name: str, api_call: Callable[[Any], Any]):
         super().__init__(name)
         self.api_call = api_call
@@ -56,9 +56,9 @@ class AsyncAPIComponent(ReactiveAIComponent):
         return await self.api_call(input_data)
 
 
-class RetryComponent(ReactiveAIComponent):
+class RetryComponent(ReactiveComponent):
     def __init__(
-        self, name: str, max_retries: int, retry_delay: float, component: ReactiveAIComponent
+        self, name: str, max_retries: int, retry_delay: float, component: ReactiveComponent
     ):
         super().__init__(name)
         self.max_retries = max_retries
@@ -75,8 +75,8 @@ class RetryComponent(ReactiveAIComponent):
                 await asyncio.sleep(self.retry_delay)
 
 
-class CacheComponent(ReactiveAIComponent):
-    def __init__(self, name: str, component: ReactiveAIComponent, cache_size: int = 100):
+class CacheComponent(ReactiveComponent):
+    def __init__(self, name: str, component: ReactiveComponent, cache_size: int = 100):
         super().__init__(name)
         self.component = component
         self.cache = {}
@@ -95,7 +95,7 @@ class CacheComponent(ReactiveAIComponent):
         return result
 
 
-class ValidationComponent(ReactiveAIComponent):
+class ValidationComponent(ReactiveComponent):
     def __init__(self, name: str, schema: Dict[str, Any]):
         super().__init__(name)
         self.schema = schema

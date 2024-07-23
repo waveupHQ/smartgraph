@@ -11,10 +11,10 @@ import pyarrow.parquet as pq
 import yaml
 from reactivex import Observable, Subject
 
-from smartgraph import ReactiveAIComponent
+from smartgraph import ReactiveComponent
 
 
-class BaseInputHandler(ReactiveAIComponent):
+class BaseInputHandler(ReactiveComponent):
     def __init__(self, name: str):
         super().__init__(name)
         self.input_subject = Subject()

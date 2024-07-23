@@ -1,6 +1,4 @@
 # smartgraph/components/__init__.py
-
-from .human_in_the_loop import HumanInTheLoopComponent, HumanInTheLoopGraph
 from .input_handlers import (
     BaseInputHandler,
     CommandLineInputHandler,
@@ -53,6 +51,4 @@ __all__ = [
     "YAMLInputHandler",
     "ParquetInputHandler",
     "StructuredDataDetector",
-    "HumanInTheLoopComponent",
-    "HumanInTheLoopGraph",
 ]

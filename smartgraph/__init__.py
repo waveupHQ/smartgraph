@@ -1,12 +1,8 @@
 # smartgraph/__init__.py
 
-from .assistant_conversation import ReactiveAssistantConversation
-from .component import ReactiveAIComponent
-
 # Import all components
-from .components import *  # noqa: F403
-from .components.human_in_the_loop import HumanInTheLoopComponent, HumanInTheLoopGraph
-from .core import ReactiveEdge, ReactiveNode, StateManager
+from .components import *
+from .core import Pipeline, ReactiveComponent, ReactiveSmartGraph
 from .exceptions import (
     ConfigurationError,
     ExecutionError,
@@ -15,18 +11,20 @@ from .exceptions import (
     SmartGraphException,
     ValidationError,
 )
-from .graph import ReactiveSmartGraph
+from .graph_visualizer import GraphVisualizer
 from .logging import SmartGraphLogger
+
+# Import all toolkits
+from .tools import *
+from .tools.memory_toolkit import MemoryToolkit
 
 # List of core classes
 __core_classes__ = [
-    "ReactiveAIComponent",
-    "StateManager",
-    "ReactiveNode",
-    "ReactiveEdge",
+    "ReactiveComponent",
+    "Pipeline",
     "ReactiveSmartGraph",
-    "ReactiveAssistantConversation",
     "SmartGraphLogger",
+    "GraphVisualizer",
     "SmartGraphException",
     "ExecutionError",
     "ConfigurationError",
@@ -35,7 +33,7 @@ __core_classes__ = [
     "GraphStructureError",
 ]
 
-# Combine core classes and components
+# Combine core classes, components, and toolkits
 __all__ = __core_classes__ + [
     "AggregatorComponent",
     "FilterComponent",
@@ -61,7 +59,9 @@ __all__ = __core_classes__ + [
     "ParquetInputHandler",
     "StructuredDataDetector",
     "HumanInTheLoopComponent",
-    "HumanInTheLoopGraph",
+    "MemoryToolkit",
+    "DuckDuckGoToolkit",
+    "TavilyToolkit",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.0.3"
