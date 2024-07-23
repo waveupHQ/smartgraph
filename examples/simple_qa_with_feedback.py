@@ -14,6 +14,7 @@ load_dotenv()
 logger = SmartGraphLogger.get_logger()
 logger.set_level("ERROR")
 
+
 class LLMQAAgent(ReactiveAssistantConversation):
     def __init__(self, name: str):
         super().__init__(
@@ -26,6 +27,7 @@ class LLMQAAgent(ReactiveAssistantConversation):
         prompt = f"Please answer the following question concisely: {input_data}"
         response = await super().process(prompt)
         return response
+
 
 class FeedbackComponent(HumanInTheLoopComponent):
     def __init__(self, name: str):
@@ -45,6 +47,7 @@ class FeedbackComponent(HumanInTheLoopComponent):
 
     async def _process_human_input(self, human_input: Any, system_output: Any) -> Any:
         return f"Feedback received: {human_input}"
+
 
 async def main():
     # Check for API key
@@ -76,18 +79,18 @@ async def main():
 
     for question in questions:
         print(f"\nQuestion: {question}")
-        
+
         try:
             # Get answer from QA agent
             answer = await graph.execute("qa", question)
             print(f"Answer: {answer}")
-            
+
             # Get feedback on the answer
             feedback = await graph.execute("feedback", answer)
             print(f"Feedback: {feedback}")
         except Exception as e:
             logger.error(f"Error processing question '{question}': {str(e)}")
 
+
 if __name__ == "__main__":
     asyncio.run(main())
-

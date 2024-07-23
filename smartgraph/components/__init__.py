@@ -1,12 +1,6 @@
 # smartgraph/components/__init__.py
 
-from .human_in_the_loop import (
-    BasicApprovalComponent,
-    CorrectionRefinementComponent,
-    GuidedDecisionMakingComponent,
-    HumanInTheLoopComponent,
-    IterativeFeedbackComponent,
-)
+from .human_in_the_loop import HumanInTheLoopComponent, HumanInTheLoopGraph
 from .input_handlers import (
     BaseInputHandler,
     CommandLineInputHandler,
@@ -60,8 +54,5 @@ __all__ = [
     "ParquetInputHandler",
     "StructuredDataDetector",
     "HumanInTheLoopComponent",
-    "BasicApprovalComponent",
-    "CorrectionRefinementComponent",
-    "GuidedDecisionMakingComponent",
-    "IterativeFeedbackComponent",
+    "HumanInTheLoopGraph",
 ]

@@ -1,161 +1,100 @@
 # smartgraph/components/human_in_the_loop.py
 
 import asyncio
-from typing import Any, Dict, Optional
+from typing import Any, Optional, Dict
 
-from reactivex import Observable, Subject
+from reactivex import Subject
 
-from smartgraph import ReactiveAIComponent
-from smartgraph.logging import SmartGraphLogger
+from ..component import ReactiveAIComponent
+from ..graph import ReactiveSmartGraph
+from ..core import ReactiveNode
+from ..exceptions import ExecutionError
+from ..logging import SmartGraphLogger
 
 logger = SmartGraphLogger.get_logger()
 
-
 class HumanInTheLoopComponent(ReactiveAIComponent):
-    def __init__(self, name: str):
+    def __init__(self, name: str, graph: 'HumanInTheLoopGraph'):
         super().__init__(name)
-        self.human_input_subject = Subject()
-        self.system_output_subject = Subject()
-        self.final_output_subject = Subject()
+        self.graph = graph
         self.human_input_event = asyncio.Event()
         self.human_input_value = None
 
-    async def process(self, input_data: Any) -> Any:
-        try:
-            system_output = await self._generate_system_output(input_data)
-            self.system_output_subject.on_next(system_output)
-
-            human_input = await self._get_human_input(system_output)
-            if human_input is None:
-                return {"error": "Timeout waiting for human input"}
-
-            final_output = await self._process_human_input(human_input, system_output)
-            self.final_output_subject.on_next(final_output)
-            return final_output
-        except Exception as e:
-            error_message = f"Error in {self.name} process: {str(e)}"
-            logger.error(error_message)
-            return {"error": error_message}
-
-    async def _generate_system_output(self, input_data: Any) -> Any:
-        # Implement system logic here
-        raise NotImplementedError
-
-    async def _get_human_input(self, system_output: Any, timeout: float = 60.0) -> Any:
+    async def _get_human_approval(self, data: Any) -> bool:
+        logger.info(f"Requesting approval for: {data}")
+        self.graph.global_output.on_next({"type": "approval_request", "data": data})
+        
         self.human_input_event.clear()
-        self.human_input_value = None
-
-        try:
-            await asyncio.wait_for(self.human_input_event.wait(), timeout=timeout)
-            return self.human_input_value
-        except asyncio.TimeoutError:
-            return None
-
-    async def _process_human_input(self, human_input: Any, system_output: Any) -> Any:
-        # Process human input and generate final output
-        raise NotImplementedError
+        await self.human_input_event.wait()
+        
+        approval = self.human_input_value.lower() in ('yes', 'y', 'true', '1')
+        logger.info(f"Approval {'granted' if approval else 'denied'}")
+        return approval
 
     def submit_human_input(self, input_data: Any):
         self.human_input_value = input_data
         self.human_input_event.set()
-        self.human_input_subject.on_next(input_data)
 
-    def get_system_output_observable(self) -> Observable:
-        return self.system_output_subject
+    def get_system_output_observable(self):
+        return self.graph.global_output
 
-    def get_final_output_observable(self) -> Observable:
-        return self.final_output_subject
-
-    async def _get_human_input(self, system_output: Any, timeout: float = 60.0) -> Any:
-        self.human_input_event.clear()
-        self.human_input_value = None
-
-        try:
-            await asyncio.wait_for(self.human_input_event.wait(), timeout=timeout)
-            return self.human_input_value
-        except asyncio.TimeoutError:
-            return None
-
-
-class BasicApprovalComponent(HumanInTheLoopComponent):
-    async def _generate_system_output(self, input_data: Any) -> Dict[str, Any]:
-        # Generate a decision or action for approval
-        return {"decision": "Proposed action", "data": input_data}
-
-    async def _process_human_input(
-        self, human_input: bool, system_output: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        if human_input:
-            return {"status": "approved", "action": system_output["decision"]}
-        else:
-            return {"status": "rejected", "action": None}
-
-
-class CorrectionRefinementComponent(HumanInTheLoopComponent):
-    async def _generate_system_output(self, input_data: Any) -> str:
-        # Generate initial output
-        return f"Initial output based on: {input_data}"
-
-    async def _process_human_input(self, human_input: str, system_output: str) -> str:
-        # Incorporate human corrections/refinements
-        return f"Refined output: {human_input}"
-
-
-class GuidedDecisionMakingComponent(HumanInTheLoopComponent):
-    async def _generate_system_output(self, input_data: Any) -> Dict[str, Any]:
-        # Generate options with pros and cons
-        return {
-            "options": [
-                {"name": "Option A", "pros": ["Pro 1", "Pro 2"], "cons": ["Con 1"]},
-                {"name": "Option B", "pros": ["Pro 1"], "cons": ["Con 1", "Con 2"]},
-            ]
-        }
-
-    async def _process_human_input(
-        self, human_input: str, system_output: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        # Process the selected option
-        return {"selected_option": human_input, "original_options": system_output["options"]}
-
-
-class IterativeFeedbackComponent(HumanInTheLoopComponent):
-    async def _generate_system_output(self, input_data: Any) -> Dict[str, Any]:
-        # Generate initial output
-        return {"iteration": 1, "output": f"Initial output for: {input_data}"}
-
-    async def _process_human_input(
-        self, human_input: Dict[str, Any], system_output: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        # Process feedback and generate new output
-        new_iteration = system_output["iteration"] + 1
-        return {
-            "iteration": new_iteration,
-            "output": f"Refined output (iteration {new_iteration}): {human_input['feedback']}",
-        }
+    def get_final_output_observable(self):
+        return self.graph.global_output
 
     async def process(self, input_data: Any) -> Any:
+        # This method is required by ReactiveAIComponent, but not used in this context
+        pass
+
+class HumanInTheLoopGraph(ReactiveSmartGraph):
+    def __init__(self):
+        super().__init__()
+        self.hil_component = HumanInTheLoopComponent("HILComponent", self)
+        self.current_node = None
+        self.global_output = Subject()
+
+    async def execute(self, start_node_id: str, input_data: Any) -> Any:
+        self.current_node = self.nodes.get(start_node_id)
+        
+        async def process_node_with_approval(node_id: str, data: Any):
+            node = self.nodes[node_id]
+            if getattr(node, 'requires_approval', False):
+                approval = await self.hil_component._get_human_approval(data)
+                if not approval:
+                    logger.info("Transaction rejected by user")
+                    return {"status": "rejected", "message": "Action not approved by human"}
+            result = await node.process(data)
+            logger.info(f"Node {node_id} processed. Result: {result}")
+            return result
+
+        async def traverse_graph(node_id: str, data: Any):
+            self.current_node = self.nodes.get(node_id)
+            result = await process_node_with_approval(node_id, data)
+            if isinstance(result, dict) and result.get("status") == "rejected":
+                return result
+            
+            next_nodes = list(self.graph.successors(node_id))
+            if not next_nodes:
+                return result
+            
+            for next_node in next_nodes:
+                edge_data = self.graph.get_edge_data(node_id, next_node)
+                condition = edge_data.get("condition", lambda _: True)
+                if condition(result):
+                    result = await traverse_graph(next_node, result)
+            return result
+
         try:
-            system_output = await self._generate_system_output(input_data)
-            iteration = 1
-            while True:
-                self.system_output_subject.on_next(system_output)
-                human_input = await self._get_human_input(system_output)
-                if human_input is None:
-                    return {"error": "No human input received"}
-                if human_input.get("complete", False):
-                    break
-                system_output = await self._process_human_input(human_input, system_output)
-                iteration += 1
-            final_output = {
-                "iteration": iteration,
-                "output": f"Refined output (iteration {iteration}): {human_input['feedback']}",
-            }
-            self.final_output_subject.on_next(final_output)
-            return final_output
+            final_result = await asyncio.wait_for(traverse_graph(start_node_id, input_data), timeout=60)
+            self.current_node = None
+            logger.info(f"Execution completed. Final result: {final_result}")
+            return final_result
         except Exception as e:
-            error_message = f"Error in {self.name} process: {str(e)}"
-            logger.error(error_message)
-            return {"error": error_message}
+            logger.error(f"Execution failed: {e}")
+            raise ExecutionError(f"Error during execution: {str(e)}", node_id=start_node_id)
 
+    def get_current_node(self) -> Optional[ReactiveNode]:
+        return self.current_node
 
-# Additional components can be implemented for other patterns...
+    def get_hil_component(self) -> HumanInTheLoopComponent:
+        return self.hil_component
+

@@ -5,7 +5,8 @@ from .component import ReactiveAIComponent
 
 # Import all components
 from .components import *  # noqa: F403
-from .core import ReactiveEdge, ReactiveNode, ReactiveSmartGraph, StateManager
+from .components.human_in_the_loop import HumanInTheLoopComponent, HumanInTheLoopGraph
+from .core import ReactiveEdge, ReactiveNode, StateManager
 from .exceptions import (
     ConfigurationError,
     ExecutionError,
@@ -14,6 +15,7 @@ from .exceptions import (
     SmartGraphException,
     ValidationError,
 )
+from .graph import ReactiveSmartGraph
 from .logging import SmartGraphLogger
 
 # List of core classes
@@ -59,10 +61,7 @@ __all__ = __core_classes__ + [
     "ParquetInputHandler",
     "StructuredDataDetector",
     "HumanInTheLoopComponent",
-    "BasicApprovalComponent",
-    "CorrectionRefinementComponent",
-    "GuidedDecisionMakingComponent",
-    "IterativeFeedbackComponent",
+    "HumanInTheLoopGraph",
 ]
 
 __version__ = "0.2.0"
