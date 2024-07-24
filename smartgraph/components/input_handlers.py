@@ -11,7 +11,7 @@ import pyarrow.parquet as pq
 import yaml
 from reactivex import Observable, Subject
 
-from smartgraph import ReactiveComponent
+from ..core import ReactiveComponent
 
 
 class BaseInputHandler(ReactiveComponent):

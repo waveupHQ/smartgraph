@@ -3,7 +3,7 @@
 import asyncio
 from typing import Any, Callable, Dict, List
 
-from smartgraph import ReactiveComponent
+from ..core import ReactiveComponent
 
 
 class AggregatorComponent(ReactiveComponent):

@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from reactivex import Observable
 from reactivex.subject import BehaviorSubject, Subject
 
-from .exceptions import ConfigurationError, ExecutionError
+from .exceptions import CompilationError, ConfigurationError, ExecutionError
 from .logging import SmartGraphLogger
 
 logger = SmartGraphLogger.get_logger()
@@ -113,6 +113,8 @@ class ReactiveSmartGraph:
     def __init__(self):
         self.pipelines: Dict[str, Pipeline] = {}
         self.connections: Dict[str, Dict[str, List[Dict[str, str]]]] = {}
+        self.is_compiled = False
+        self.runtime_args: Dict[str, Any] = {}
 
     def create_pipeline(self, name: str) -> Pipeline:
         if name in self.pipelines:
@@ -148,27 +150,126 @@ class ReactiveSmartGraph:
             f"Connected {source_pipeline}.{source_component} to {target_pipeline}.{target_component}"
         )
 
-    def compile(self):
-        for pipeline in self.pipelines.values():
-            pipeline.compile()
+    def compile(self, **runtime_args):
+        logger.info("Starting graph compilation")
+        self.runtime_args = runtime_args
+        self._check_orphaned_components()
+        self._check_cyclic_connections()
+        self._check_unbounded_recursion()
 
-        for source_pipeline, source_connections in self.connections.items():
-            for source_component, targets in source_connections.items():
+        # Connect components within pipelines
+        for pipeline in self.pipelines.values():
+            components = list(pipeline.components.values())
+            for i in range(len(components) - 1):
+                components[i].output.subscribe(components[i+1].input)
+
+        # Connect components across pipelines
+        for source_pipeline, connections in self.connections.items():
+            for source_component, targets in connections.items():
                 source = self.pipelines[source_pipeline].components[source_component]
                 for target in targets:
-                    target_pipeline = self.pipelines[target["target_pipeline"]]
-                    target_component = target_pipeline.components[target["target_component"]]
-                    source.output.subscribe(
-                        target_component.input,
-                        lambda error: logger.error(
-                            f"Error in connection {source_pipeline}.{source_component} -> {target['target_pipeline']}.{target['target_component']}: {error}"
-                        ),
-                    )
+                    target_component = self.pipelines[target['target_pipeline']].components[target['target_component']]
+                    source.output.subscribe(target_component.input)
 
-        logger.info("Compiled ReactiveSmartGraph")
+        self.is_compiled = True
+        logger.info("Graph compiled successfully")
+
+    def _check_orphaned_components(self):
+        all_components = set()
+        pipeline_components = set()
+
+        # Collect all components and components in pipelines
+        for pipeline_name, pipeline in self.pipelines.items():
+            for component_name in pipeline.components:
+                all_components.add(f"{pipeline_name}.{component_name}")
+                pipeline_components.add(f"{pipeline_name}.{component_name}")
+
+        # Check for components in connections that are not in any pipeline
+        for pipeline_name, connections in self.connections.items():
+            for component_name, targets in connections.items():
+                all_components.add(f"{pipeline_name}.{component_name}")
+                for target in targets:
+                    all_components.add(f"{target['target_pipeline']}.{target['target_component']}")
+
+        # Identify orphaned components
+        orphaned = all_components - pipeline_components
+        if orphaned:
+            raise CompilationError(f"Orphaned components detected: {orphaned}")
+
+    def _check_cyclic_connections(self):
+        def dfs(node, visited, rec_stack):
+            visited.add(node)
+            rec_stack.add(node)
+
+            pipeline_name, component_name = node.split(".")
+            if (
+                pipeline_name in self.connections
+                and component_name in self.connections[pipeline_name]
+            ):
+                for target in self.connections[pipeline_name][component_name]:
+                    neighbor = f"{target['target_pipeline']}.{target['target_component']}"
+                    if neighbor not in visited:
+                        if dfs(neighbor, visited, rec_stack):
+                            return True
+                    elif neighbor in rec_stack:
+                        return True
+
+            rec_stack.remove(node)
+            return False
+
+        visited = set()
+        rec_stack = set()
+
+        for pipeline_name, pipeline in self.pipelines.items():
+            for component_name in pipeline.components:
+                node = f"{pipeline_name}.{component_name}"
+                if node not in visited:
+                    if dfs(node, visited, rec_stack):
+                        raise CompilationError("Cyclic connections detected in the graph")
+
+    def _check_unbounded_recursion(self):
+        max_depth = self.runtime_args.get("max_depth", 100)
+        for pipeline_name, pipeline in self.pipelines.items():
+            for component_name in pipeline.components:
+                stack = [(pipeline_name, component_name, 0)]
+                while stack:
+                    current_pipeline, current_component, depth = stack.pop()
+                    if depth > max_depth:
+                        raise CompilationError(
+                            f"Potential unbounded recursion detected starting from {current_pipeline}.{current_component}"
+                        )
+                    if (
+                        current_pipeline in self.connections
+                        and current_component in self.connections[current_pipeline]
+                    ):
+                        for target in self.connections[current_pipeline][current_component]:
+                            stack.append(
+                                (target["target_pipeline"], target["target_component"], depth + 1)
+                            )
 
     def execute(self, pipeline_name: str, input_data: Any) -> Observable:
+        if not self.is_compiled:
+            raise CompilationError("Graph must be compiled before execution")
+        
         if pipeline_name not in self.pipelines:
             raise ConfigurationError(f"Pipeline {pipeline_name} does not exist")
+        
+        pipeline = self.pipelines[pipeline_name]
+        first_component = next(iter(pipeline.components.values()))
+        last_component = list(pipeline.components.values())[-1]
 
-        return self.pipelines[pipeline_name].execute(input_data)
+        def subscribe(observer, scheduler=None):
+            def on_next(value):
+                observer.on_next(value)
+            
+            def on_error(error):
+                observer.on_error(error)
+            
+            def on_completed():
+                observer.on_completed()
+
+            last_component.output.subscribe(on_next, on_error, on_completed)
+            first_component.input.on_next(input_data)
+
+        return Observable(subscribe)
+
