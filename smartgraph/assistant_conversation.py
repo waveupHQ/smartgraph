@@ -9,7 +9,7 @@ from reactivex import Observable
 from reactivex import operators as ops
 from reactivex.subject import Subject
 
-from .component import ReactiveAIComponent
+from .core import ReactiveComponent
 from .logging import SmartGraphLogger
 from .tools.base_toolkit import Toolkit
 
@@ -18,7 +18,7 @@ logger = SmartGraphLogger.get_logger()
 MAX_TOKENS = 4000
 
 
-class ReactiveAssistantConversation(ReactiveAIComponent):
+class ReactiveAssistantConversation(ReactiveComponent):
     def __init__(
         self,
         name: str = "AI Assistant",
