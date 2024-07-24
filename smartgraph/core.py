@@ -161,14 +161,16 @@ class ReactiveSmartGraph:
         for pipeline in self.pipelines.values():
             components = list(pipeline.components.values())
             for i in range(len(components) - 1):
-                components[i].output.subscribe(components[i+1].input)
+                components[i].output.subscribe(components[i + 1].input)
 
         # Connect components across pipelines
         for source_pipeline, connections in self.connections.items():
             for source_component, targets in connections.items():
                 source = self.pipelines[source_pipeline].components[source_component]
                 for target in targets:
-                    target_component = self.pipelines[target['target_pipeline']].components[target['target_component']]
+                    target_component = self.pipelines[target["target_pipeline"]].components[
+                        target["target_component"]
+                    ]
                     source.output.subscribe(target_component.input)
 
         self.is_compiled = True
@@ -250,10 +252,10 @@ class ReactiveSmartGraph:
     def execute(self, pipeline_name: str, input_data: Any) -> Observable:
         if not self.is_compiled:
             raise CompilationError("Graph must be compiled before execution")
-        
+
         if pipeline_name not in self.pipelines:
             raise ConfigurationError(f"Pipeline {pipeline_name} does not exist")
-        
+
         pipeline = self.pipelines[pipeline_name]
         first_component = next(iter(pipeline.components.values()))
         last_component = list(pipeline.components.values())[-1]
@@ -261,10 +263,10 @@ class ReactiveSmartGraph:
         def subscribe(observer, scheduler=None):
             def on_next(value):
                 observer.on_next(value)
-            
+
             def on_error(error):
                 observer.on_error(error)
-            
+
             def on_completed():
                 observer.on_completed()
 
@@ -272,4 +274,3 @@ class ReactiveSmartGraph:
             first_component.input.on_next(input_data)
 
         return Observable(subscribe)
-

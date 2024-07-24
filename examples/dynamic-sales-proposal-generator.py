@@ -10,8 +10,9 @@ class ClientAnalyzer(ReactiveAssistantConversation):
         return {
             "size": "large" if input_data["annual_revenue"] > 1000000 else "small",
             "industry": input_data["industry"],
-            "pain_points": input_data["pain_points"]
+            "pain_points": input_data["pain_points"],
         }
+
 
 class ProductMatcher(ReactiveAssistantConversation):
     async def process(self, input_data):
@@ -20,6 +21,7 @@ class ProductMatcher(ReactiveAssistantConversation):
             return ["CRM Software", "Project Management Tool"]
         return ["Generic Solution A", "Generic Solution B"]
 
+
 class PricingStrategy(ReactiveAssistantConversation):
     async def process(self, input_data):
         # Simplified pricing strategy
@@ -27,15 +29,17 @@ class PricingStrategy(ReactiveAssistantConversation):
         base_price = 1000 if client_size == "large" else 500
         return {product: base_price * (i + 1) for i, product in enumerate(products)}
 
+
 class ProposalGenerator(ReactiveAssistantConversation):
     async def process(self, input_data):
         client_info, products, pricing = input_data
         proposal = f"Proposal for {client_info['industry']} client\n\n"
-        proposal += f"Recommended Solutions:\n"
+        proposal += "Recommended Solutions:\n"
         for product in products:
             proposal += f"- {product}: ${pricing[product]}\n"
         proposal += f"\nTotal Value: ${sum(pricing.values())}"
         return proposal
+
 
 async def main():
     graph = ReactiveSmartGraph()
@@ -74,9 +78,9 @@ async def main():
     client_data = {
         "annual_revenue": 2000000,
         "industry": "technology",
-        "pain_points": ["efficiency", "scalability"]
+        "pain_points": ["efficiency", "scalability"],
     }
-    
+
     client_analysis = await graph.execute("analyze", client_data)
     matched_products = await graph.execute("match", client_analysis)
     pricing = await graph.execute("price", (client_analysis["size"], matched_products))
@@ -85,6 +89,8 @@ async def main():
 
     print(proposal)
 
+
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

@@ -31,6 +31,7 @@ __core_classes__ = [
     "ValidationError",
     "MemoryError",
     "GraphStructureError",
+    "GraphVisualizer",
 ]
 
 # Combine core classes, components, and toolkits

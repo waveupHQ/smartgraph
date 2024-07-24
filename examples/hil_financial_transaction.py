@@ -1,13 +1,15 @@
 import asyncio
-from typing import Dict, Any
+from typing import Any, Dict
+
 from reactivex import Observable, create
 from reactivex import operators as ops
-from reactivex.subject import Subject
 from reactivex.scheduler import NewThreadScheduler
+from reactivex.subject import Subject
 
 from smartgraph.logging import SmartGraphLogger
 
 logger = SmartGraphLogger.get_logger()
+
 
 class FinancialTransactionPipeline:
     def __init__(self):
@@ -18,8 +20,8 @@ class FinancialTransactionPipeline:
             ops.map(self.verify_account),
             ops.map(self.prepare_transaction),
             ops.flat_map(self.request_approval),
-            ops.filter(lambda x: x['approved']),
-            ops.map(self.execute_transaction)
+            ops.filter(lambda x: x["approved"]),
+            ops.map(self.execute_transaction),
         )
 
     def verify_account(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -32,14 +34,14 @@ class FinancialTransactionPipeline:
 
     def request_approval(self, data: Dict[str, Any]) -> Observable:
         def approval_input(observer, scheduler):
-            print(f"\nApproval required for transaction:")
+            print("\nApproval required for transaction:")
             print(f"Transaction ID: {data['transaction_id']}")
             print(f"Amount: ${data['amount']:.2f}")
             print(f"Fee: ${data['fee']:.2f}")
-            
+
             user_input = input("Do you approve this transaction? (yes/no): ").lower()
-            approved = user_input in ('yes', 'y')
-            observer.on_next({**data, 'approved': approved})
+            approved = user_input in ("yes", "y")
+            observer.on_next({**data, "approved": approved})
             observer.on_completed()
 
         return create(approval_input)
@@ -49,14 +51,15 @@ class FinancialTransactionPipeline:
         return {
             **data,
             "status": "completed",
-            "new_balance": data["balance"] - data["amount"] - data["fee"]
+            "new_balance": data["balance"] - data["amount"] - data["fee"],
         }
+
 
 def main():
     pipeline = FinancialTransactionPipeline()
 
     def on_next(x):
-        if x['approved']:
+        if x["approved"]:
             print("\nFinal Result:")
             print(f"Transaction Status: {x['status']}")
             print(f"Transaction ID: {x['transaction_id']}")
@@ -70,18 +73,14 @@ def main():
     def on_completed():
         print("Transaction processing completed.")
 
-    input_data = {
-        "account_id": "ACC987654",
-        "amount": 500.00
-    }
+    input_data = {"account_id": "ACC987654", "amount": 500.00}
 
     pipeline.process_transaction(input_data).subscribe(
-        on_next=on_next,
-        on_error=on_error,
-        on_completed=on_completed
+        on_next=on_next, on_error=on_error, on_completed=on_completed
     )
-    
+
     pipeline.input_subject.on_next(input_data)
+
 
 if __name__ == "__main__":
     main()
