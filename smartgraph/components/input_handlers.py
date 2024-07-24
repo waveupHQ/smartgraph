@@ -164,27 +164,23 @@ class CommandLineInputHandler(UnstructuredDataInputHandler):
 # Specific Structured Data Handler
 
 
-class JSONInputHandler(StructuredDataInputHandler):
-    async def _handle_input(self, input_data: str) -> Dict[str, Any]:
-        result = await super()._handle_input(input_data)
+class JSONInputHandler(ReactiveComponent):
+    async def process(self, input_data: str) -> dict:
         try:
             parsed_data = json.loads(input_data)
-            result.update({"type": "json", "parsed_data": parsed_data})
+            return {"type": "json", "parsed_data": parsed_data}
         except json.JSONDecodeError as e:
-            result.update({"type": "json", "error": f"Failed to parse JSON: {str(e)}"})
-        return result
+            return {"type": "json", "error": f"Failed to parse JSON: {str(e)}"}
 
 
 class XMLInputHandler(StructuredDataInputHandler):
     async def _handle_input(self, input_data: str) -> Dict[str, Any]:
-        result = await super()._handle_input(input_data)
         try:
             root = ET.fromstring(input_data)
             parsed_data = {"root": self._element_to_dict(root)}
-            result.update({"type": "xml", "parsed_data": parsed_data})
+            return {"type": "xml", "parsed_data": parsed_data}
         except ET.ParseError as e:
-            result.update({"type": "xml", "error": f"Failed to parse XML: {str(e)}"})
-        return result
+            return {"type": "xml", "error": f"Failed to parse XML: {str(e)}"}
 
     def _element_to_dict(self, element: ET.Element) -> Dict[str, Any]:
         result = {}
@@ -198,32 +194,26 @@ class XMLInputHandler(StructuredDataInputHandler):
 
 class CSVInputHandler(StructuredDataInputHandler):
     async def _handle_input(self, input_data: str) -> Dict[str, Any]:
-        result = await super()._handle_input(input_data)
         try:
             csv_data = csv.DictReader(StringIO(input_data))
-            parsed_data = [row for row in csv_data]
-            result.update(
-                {"type": "csv", "parsed_data": parsed_data, "headers": csv_data.fieldnames}
-            )
+            parsed_data = list(csv_data)
+            return {"type": "csv", "parsed_data": parsed_data, "headers": csv_data.fieldnames}
         except csv.Error as e:
-            result.update({"type": "csv", "error": f"Failed to parse CSV: {str(e)}"})
-        return result
+            return {"type": "csv", "error": str(e)}
 
 
 class YAMLInputHandler(StructuredDataInputHandler):
     async def _handle_input(self, input_data: str) -> Dict[str, Any]:
-        result = await super()._handle_input(input_data)
         try:
             parsed_data = yaml.safe_load(input_data)
-            result.update({"type": "yaml", "parsed_data": parsed_data})
+            return {"type": "yaml", "parsed_data": parsed_data}
         except yaml.YAMLError as e:
-            result.update({"type": "yaml", "error": f"Failed to parse YAML: {str(e)}"})
-        return result
+            return {"type": "yaml", "error": f"Failed to parse YAML: {str(e)}"}
 
 
 class ParquetInputHandler(StructuredDataInputHandler):
     async def _handle_input(self, input_data: Union[bytes, BytesIO]) -> Dict[str, Any]:
-        result = await super()._handle_input(input_data)
+        result = {}
         try:
             if isinstance(input_data, bytes):
                 input_data = BytesIO(input_data)
@@ -256,7 +246,7 @@ class StructuredDataDetector(StructuredDataInputHandler):
         }
 
     async def _handle_input(self, input_data: Any) -> Dict[str, Any]:
-        result = await super()._handle_input(input_data)
+        result = {}
         detected_type = self._detect_type(input_data)
         if detected_type:
             handler = self.handlers[detected_type]

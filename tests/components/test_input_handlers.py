@@ -1,227 +1,265 @@
-# tests/test_data_input_handlers_example.py
-
+# components/test_input_handlers.py
 import asyncio
 import json
-from io import BytesIO
-from unittest.mock import AsyncMock, MagicMock, patch
+import xml.etree.ElementTree as ET  # noqa: N817
+from io import BytesIO, StringIO
 
 import pandas as pd
 import pytest
 import yaml
+from reactivex import operators as ops
+from reactivex.testing import ReactiveTest, TestScheduler
 
-from smartgraph import ReactiveSmartGraph
 from smartgraph.components.input_handlers import (
-    CommandLineInputHandler,
     CSVInputHandler,
+    FileUploadHandler,
     ImageUploadHandler,
     JSONInputHandler,
     ParquetInputHandler,
-    StructuredDataDetector,
     TextInputHandler,
     XMLInputHandler,
     YAMLInputHandler,
 )
+from smartgraph.core import ReactiveSmartGraph
+
+on_next = ReactiveTest.on_next
+on_completed = ReactiveTest.on_completed
+on_error = ReactiveTest.on_error
 
 
 @pytest.fixture
-def mock_graph():
-    graph = ReactiveSmartGraph()
-    graph.add_node = MagicMock()
-    graph.add_edge = MagicMock()
-    graph.execute = AsyncMock()
-    return graph
+def graph():
+    return ReactiveSmartGraph()
 
 
-@pytest.fixture
-def mock_assistant():
-    return AsyncMock()
-
-
-@pytest.mark.asyncio
-async def test_text_input_handler(mock_graph):
+def test_text_input_handler(graph):
+    scheduler = TestScheduler()
     text_input = TextInputHandler("TextInput")
-    mock_graph.execute.return_value = {
+    pipeline = graph.create_pipeline("TestPipeline")
+    pipeline.add_component(text_input)
+    graph.compile()
+
+    def create():
+        return graph.execute("TestPipeline", "Hello, world!").pipe(
+            ops.map(lambda x: asyncio.get_event_loop().run_until_complete(x))
+        )
+
+    results = scheduler.start(create)
+
+    assert len(results.messages) == 1
+    assert results.messages[0].value.kind == "N"  # 'N' for "OnNext"
+    assert results.messages[0].time == 200
+    assert results.messages[0].value.value == {
         "type": "text",
-        "content": "Analyze the impact of artificial intelligence on job markets.",
-        "length": 61,
-        "word_count": 9,
+        "content": "Hello, world!",
+        "length": 13,
+        "word_count": 2,
     }
 
-    result = await mock_graph.execute(
-        "text_input", "Analyze the impact of artificial intelligence on job markets."
-    )
-    assert result["type"] == "text"
-    assert result["content"] == "Analyze the impact of artificial intelligence on job markets."
-    assert result["length"] == 61
-    assert result["word_count"] == 9
 
-
-@pytest.mark.asyncio
-async def test_image_upload_handler(mock_graph):
-    image_input = ImageUploadHandler("ImageInput")
-    mock_graph.execute.return_value = {
-        "type": "image",
-        "filename": "ai_impact.jpg",
-        "content": "base64_encoded_image_data",
-        "dimensions": "1024x768",
-        "format": "jpeg",
-    }
-
-    result = await mock_graph.execute(
-        "image_input", {"filename": "ai_impact.jpg", "content": "base64_encoded_image_data"}
-    )
-    assert result["type"] == "image"
-    assert result["filename"] == "ai_impact.jpg"
-    assert result["content"] == "base64_encoded_image_data"
-
-
-@pytest.mark.asyncio
-async def test_command_line_input_handler(mock_graph):
-    cli_input = CommandLineInputHandler("CLIInput")
-    mock_graph.execute.return_value = {
-        "type": "command",
-        "command": "git",
-        "args": ["commit", "-m", "Initial AI job market analysis"],
-        "full_input": "git commit -m 'Initial AI job market analysis'",
-    }
-
-    result = await mock_graph.execute("cli_input", "git commit -m 'Initial AI job market analysis'")
-    assert result["type"] == "command"
-    assert result["command"] == "git"
-    assert result["args"] == ["commit", "-m", "Initial AI job market analysis"]
-
-
-@pytest.mark.asyncio
-async def test_json_input_handler(mock_graph):
+def test_json_input_handler(graph):
+    scheduler = TestScheduler()
     json_input = JSONInputHandler("JSONInput")
-    input_data = json.dumps({"ai_impact": {"job_creation": 500000, "job_displacement": 300000}})
-    mock_graph.execute.return_value = {
+    pipeline = graph.create_pipeline("TestPipeline")
+    pipeline.add_component(json_input)
+    graph.compile()
+
+    input_data = json.dumps({"key": "value", "number": 42})
+
+    def create():
+        return graph.execute("TestPipeline", input_data).pipe(
+            ops.map(lambda x: asyncio.get_event_loop().run_until_complete(x))
+        )
+
+    results = scheduler.start(create)
+
+    assert len(results.messages) == 1
+    assert results.messages[0].value.kind == "N"
+    assert results.messages[0].time == 200
+    assert results.messages[0].value.value == {
         "type": "json",
-        "parsed_data": {"ai_impact": {"job_creation": 500000, "job_displacement": 300000}},
+        "parsed_data": {"key": "value", "number": 42},
     }
 
-    result = await mock_graph.execute("json_input", input_data)
-    assert result["type"] == "json"
-    assert result["parsed_data"]["ai_impact"]["job_creation"] == 500000
+
+def test_json_input_handler_error(graph):
+    scheduler = TestScheduler()
+    json_input = JSONInputHandler("JSONInput")
+    pipeline = graph.create_pipeline("TestPipeline")
+    pipeline.add_component(json_input)
+    graph.compile()
+
+    input_data = "This is not valid JSON"
+
+    def create():
+        return graph.execute("TestPipeline", input_data).pipe(
+            ops.map(lambda x: asyncio.get_event_loop().run_until_complete(x))
+        )
+
+    results = scheduler.start(create)
+
+    assert len(results.messages) == 1
+    assert results.messages[0].value.kind == "N"  # 'N' for "OnNext"
+    assert results.messages[0].time == 200
+    assert results.messages[0].value.value["type"] == "json"
+    assert "error" in results.messages[0].value.value
+    assert "Failed to parse JSON" in results.messages[0].value.value["error"]
 
 
-@pytest.mark.asyncio
-async def test_xml_input_handler(mock_graph):
+def test_xml_input_handler(graph):
+    scheduler = TestScheduler()
     xml_input = XMLInputHandler("XMLInput")
-    input_data = """
-    <ai_skills>
-        <skill>machine_learning</skill>
-        <skill>data_analysis</skill>
-        <skill>natural_language_processing</skill>
-    </ai_skills>
-    """
-    mock_graph.execute.return_value = {
+    pipeline = graph.create_pipeline("TestPipeline")
+    pipeline.add_component(xml_input)
+    graph.compile()
+
+    input_data = "<root><key>value</key></root>"
+
+    def create():
+        return graph.execute("TestPipeline", input_data).pipe(
+            ops.map(lambda x: asyncio.get_event_loop().run_until_complete(x))
+        )
+
+    results = scheduler.start(create)
+
+    assert len(results.messages) == 1
+    assert results.messages[0].value.kind == "N"
+    assert results.messages[0].time == 200
+    assert results.messages[0].value.value == {
         "type": "xml",
-        "parsed_data": {
-            "ai_skills": {
-                "skill": ["machine_learning", "data_analysis", "natural_language_processing"]
-            }
-        },
+        "parsed_data": {"root": {"key": "value"}},
     }
 
-    result = await mock_graph.execute("xml_input", input_data)
-    assert result["type"] == "xml"
-    assert "machine_learning" in result["parsed_data"]["ai_skills"]["skill"]
 
-
-@pytest.mark.asyncio
-async def test_csv_input_handler(mock_graph):
-    csv_input = CSVInputHandler("CSVInput")
-    input_data = "skill,demand\nmachine_learning,high\ndata_analysis,medium\nnatural_language_processing,high"
-    mock_graph.execute.return_value = {
-        "type": "csv",
-        "parsed_data": [
-            {"skill": "machine_learning", "demand": "high"},
-            {"skill": "data_analysis", "demand": "medium"},
-            {"skill": "natural_language_processing", "demand": "high"},
-        ],
-        "headers": ["skill", "demand"],
-    }
-
-    result = await mock_graph.execute("csv_input", input_data)
-    assert result["type"] == "csv"
-    assert result["parsed_data"][0]["skill"] == "machine_learning"
-    assert result["headers"] == ["skill", "demand"]
-
-
-@pytest.mark.asyncio
-async def test_yaml_input_handler(mock_graph):
+def test_yaml_input_handler(graph):
+    scheduler = TestScheduler()
     yaml_input = YAMLInputHandler("YAMLInput")
-    input_data = yaml.dump(
-        {"ai_skills": ["machine_learning", "data_analysis", "natural_language_processing"]}
-    )
-    mock_graph.execute.return_value = {
+    pipeline = graph.create_pipeline("TestPipeline")
+    pipeline.add_component(yaml_input)
+    graph.compile()
+
+    input_data = yaml.dump({"key": "value", "nested": {"item": "data"}})
+
+    def create():
+        return graph.execute("TestPipeline", input_data).pipe(
+            ops.map(lambda x: asyncio.get_event_loop().run_until_complete(x))
+        )
+
+    results = scheduler.start(create)
+
+    assert len(results.messages) == 1
+    assert results.messages[0].value.kind == "N"
+    assert results.messages[0].time == 200
+    assert results.messages[0].value.value == {
         "type": "yaml",
-        "parsed_data": {
-            "ai_skills": ["machine_learning", "data_analysis", "natural_language_processing"]
-        },
+        "parsed_data": {"key": "value", "nested": {"item": "data"}},
     }
 
-    result = await mock_graph.execute("yaml_input", input_data)
-    assert result["type"] == "yaml"
-    assert "machine_learning" in result["parsed_data"]["ai_skills"]
 
-
-@pytest.mark.asyncio
-async def test_parquet_input_handler(mock_graph):
+def test_parquet_input_handler(graph):
+    scheduler = TestScheduler()
     parquet_input = ParquetInputHandler("ParquetInput")
-    df = pd.DataFrame(
-        {
-            "skill": ["machine_learning", "data_analysis", "natural_language_processing"],
-            "demand": ["high", "medium", "high"],
-        }
-    )
+    pipeline = graph.create_pipeline("TestPipeline")
+    pipeline.add_component(parquet_input)
+    graph.compile()
+
+    # Create a sample parquet file
+    df = pd.DataFrame({"A": [1, 2, 3], "B": ["a", "b", "c"]})
     parquet_buffer = BytesIO()
     df.to_parquet(parquet_buffer)
     parquet_buffer.seek(0)
 
-    mock_graph.execute.return_value = {
-        "type": "parquet",
-        "parsed_data": [
-            {"skill": "machine_learning", "demand": "high"},
-            {"skill": "data_analysis", "demand": "medium"},
-            {"skill": "natural_language_processing", "demand": "high"},
-        ],
-        "num_rows": 3,
-        "num_columns": 2,
+    def create():
+        return graph.execute("TestPipeline", parquet_buffer.getvalue()).pipe(
+            ops.map(lambda x: asyncio.get_event_loop().run_until_complete(x))
+        )
+
+    results = scheduler.start(create)
+
+    assert len(results.messages) == 1
+    assert results.messages[0].value.kind == "N"
+    assert results.messages[0].time == 200
+    assert results.messages[0].value.value["type"] == "parquet"
+    assert "parsed_data" in results.messages[0].value.value
+    assert len(results.messages[0].value.value["parsed_data"]) == 3
+    assert "num_rows" in results.messages[0].value.value
+    assert "num_columns" in results.messages[0].value.value
+
+
+def test_csv_input_handler(graph):
+    scheduler = TestScheduler()
+    csv_input = CSVInputHandler("CSVInput")
+    pipeline = graph.create_pipeline("TestPipeline")
+    pipeline.add_component(csv_input)
+    graph.compile()
+
+    input_data = "A,B\n1,a\n2,b\n3,c"
+
+    def create():
+        return graph.execute("TestPipeline", input_data).pipe(
+            ops.map(lambda x: asyncio.get_event_loop().run_until_complete(x))
+        )
+
+    results = scheduler.start(create)
+
+    assert len(results.messages) == 1
+    assert results.messages[0].value.kind == "N"
+    assert results.messages[0].time == 200
+    assert results.messages[0].value.value == {
+        "type": "csv",
+        "parsed_data": [{"A": "1", "B": "a"}, {"A": "2", "B": "b"}, {"A": "3", "B": "c"}],
+        "headers": ["A", "B"],
     }
 
-    result = await mock_graph.execute("parquet_input", parquet_buffer.getvalue())
-    assert result["type"] == "parquet"
-    assert result["parsed_data"][0]["skill"] == "machine_learning"
-    assert result["num_rows"] == 3
-    assert result["num_columns"] == 2
 
+def test_file_upload_handler(graph):
+    scheduler = TestScheduler()
+    file_upload = FileUploadHandler("FileUpload", allowed_extensions=[".txt"])
+    pipeline = graph.create_pipeline("TestPipeline")
+    pipeline.add_component(file_upload)
+    graph.compile()
 
-@pytest.mark.asyncio
-async def test_structured_data_detector(mock_graph):
-    detector = StructuredDataDetector("StructuredDataDetector")
-    json_data = json.dumps({"ai_impact": {"job_creation": 500000, "job_displacement": 300000}})
+    input_data = {"filename": "test.txt", "content": b"This is a test file content"}
 
-    mock_graph.execute.return_value = {
-        "type": "json",
-        "parsed_data": {"ai_impact": {"job_creation": 500000, "job_displacement": 300000}},
+    def create():
+        return graph.execute("TestPipeline", input_data).pipe(
+            ops.map(lambda x: asyncio.get_event_loop().run_until_complete(x))
+        )
+
+    results = scheduler.start(create)
+
+    assert len(results.messages) == 1
+    assert results.messages[0].value.kind == "N"
+    assert results.messages[0].time == 200
+    assert results.messages[0].value.value == {
+        "type": "file",
+        "filename": "test.txt",
+        "content": b"This is a test file content",
+        "size": len(b"This is a test file content"),
     }
 
-    result = await mock_graph.execute("structured_data_detector", json_data)
-    assert result["type"] == "json"
-    assert result["parsed_data"]["ai_impact"]["job_creation"] == 500000
 
+def test_image_upload_handler(graph):
+    scheduler = TestScheduler()
+    image_upload = ImageUploadHandler("ImageUpload")
+    pipeline = graph.create_pipeline("TestPipeline")
+    pipeline.add_component(image_upload)
+    graph.compile()
 
-@pytest.mark.asyncio
-async def test_assistant_processing(mock_graph, mock_assistant):
-    mock_graph.execute.return_value = "AI analysis result"
+    input_data = {"filename": "test.jpg", "content": b"fake image data"}
 
-    result = await mock_graph.execute(
-        "assistant", "Analyze the impact of AI on job markets based on all inputs"
-    )
-    assert result == "AI analysis result"
+    def create():
+        return graph.execute("TestPipeline", input_data).pipe(
+            ops.map(lambda x: asyncio.get_event_loop().run_until_complete(x))
+        )
 
+    results = scheduler.start(create)
 
-if __name__ == "__main__":
-    pytest.main(["-v", __file__])
+    assert len(results.messages) == 1
+    assert results.messages[0].value.kind == "N"
+    assert results.messages[0].time == 200
+    assert results.messages[0].value.value["type"] == "image"
+    assert results.messages[0].value.value["filename"] == "test.jpg"
+    assert results.messages[0].value.value["content"] == b"fake image data"
+    assert "dimensions" in results.messages[0].value.value
+    assert "format" in results.messages[0].value.value
