@@ -1,4 +1,5 @@
 # smartgraph/components/__init__.py
+from .completion_component import CompletionComponent
 from .input_handlers import (
     BaseInputHandler,
     CommandLineInputHandler,
@@ -51,4 +52,5 @@ __all__ = [
     "YAMLInputHandler",
     "ParquetInputHandler",
     "StructuredDataDetector",
+    "CompletionComponent",
 ]

@@ -33,7 +33,7 @@ __core_classes__ = [
     "MemoryError",
     "GraphStructureError",
     "GraphVisualizer",
-    "ReactiveAssistantConversation"
+    "ReactiveAssistantConversation",
 ]
 
 # Combine core classes, components, and toolkits
