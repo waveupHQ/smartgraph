@@ -1,14 +1,27 @@
 # SmartGraph
 
-SmartGraph is a Python library for building stateful, multi-actor applications with Large Language Models (LLMs). Built on top of the phidata framework, it offers core benefits such as cycles, controllability, and persistence.
+SmartGraph is a Python library for building stateful, multi-actor applications with Large Language Models (LLMs). It is built on top of the ReactiveX for Python (reactivex) framework and aims to provide a reactive, flexible, and maintainable system for creating complex data processing pipelines.
 
 ## Features
 
-- **Cycles**: Define flows that involve cycles, essential for most agentic architectures.
-- **Controllability**: Fine-grained control over both the flow and state of your application.
-- **Persistence**: Built-in persistence for advanced human-in-the-loop and memory features.
-- **Error Handling**: Robust exception hierarchy for precise error management.
-- **Logging**: Comprehensive logging system for debugging and monitoring.
+Key features of SmartGraph include:
+
+- Declarative and reactive framework for defining workflows
+- Support for both simple linear and complex branching workflows
+- Powerful state management capabilities
+- Multi-component support with easy integration of LLMs and pre-built toolkits
+- Compilation step for graph validation and runtime configuration
+
+## Principles
+
+1. Declarative and reactive framework design
+2. Simplicity in design and usage
+3. Powerful and flexible state management
+4. Multi-component support with easy extensibility
+5. Seamless integration with LLMs and pre-built toolkits
+6. Comprehensive error handling and logging
+7. Graph validation and safety through compilation step
+8. Support for both simple and complex workflow structures
 
 ## Installation
 
@@ -21,32 +34,7 @@ pip install smartgraph
 Here's a simple example of how to use SmartGraph:
 
 ```python
-from smartgraph import SmartGraph, Node, Edge, HumanActor, AIActor
-from phi.assistant import Assistant
 
-# Create actors
-human_actor = HumanActor("User")
-ai_actor = AIActor("AI", Assistant(name="AI Assistant"))
-
-# Create nodes
-start_node = Node("start", human_actor, {"description": "Start the conversation"})
-ai_response_node = Node("ai_response", ai_actor, {"prompt": "Respond to: {user_input}"})
-human_feedback_node = Node("human_feedback", human_actor, {"description": "Provide feedback on AI's response"})
-
-# Create edges
-edge1 = Edge(start_node, ai_response_node)
-edge2 = Edge(ai_response_node, human_feedback_node)
-edge3 = Edge(human_feedback_node, ai_response_node, condition=lambda data: data['response'].lower() != 'exit')
-
-# Create and execute SmartGraph
-graph = SmartGraph()
-for node in [start_node, ai_response_node, human_feedback_node]:
-    graph.add_node(node)
-for edge in [edge1, edge2, edge3]:
-    graph.add_edge(edge)
-
-final_output = graph.execute("start", {"user_input": "Hello, AI!"})
-print("Final output:", final_output)
 ```
 
 ## Error Handling and Logging
