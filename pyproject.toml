@@ -11,7 +11,6 @@ packages = [{include = "smartgraph"}]
 python = "^3.11"
 anthropic = "^0.30.0"
 python-dotenv = "^1.0.1"
-networkx = "^2.8"
 litellm = "^1.41.15"
 pydantic = "^2.8.2"
 matplotlib = "^3.9.1"
