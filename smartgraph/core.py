@@ -91,22 +91,17 @@ class Pipeline:
 
         logger.info(f"Compiled pipeline {self.name}")
 
-    def execute(self, input_data: Any) -> Observable:
-        result_subject = Subject()
-
-        def on_next(x):
-            result_subject.on_next(x)
-
-        def on_error(error):
-            result_subject.on_error(error)
-
-        def on_completed():
-            result_subject.on_completed()
-
-        self.output.subscribe(on_next, on_error, on_completed)
-        self.input.on_next(input_data)
-
-        return result_subject
+    async def execute(self, input_data: Any) -> Any:
+        logger.info(f"Executing pipeline {self.name} with input: {input_data}")
+        current_data = input_data
+        for component in self.components.values():
+            try:
+                current_data = await component.process(current_data)
+            except Exception as e:
+                logger.error(f"Error in component {component.name}: {str(e)}")
+                raise
+        logger.info(f"Pipeline {self.name} execution completed")
+        return current_data
 
 
 class ReactiveSmartGraph:

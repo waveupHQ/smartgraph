@@ -1,47 +1,42 @@
 import asyncio
-from typing import Any, Dict
-
-import litellm
-from reactivex import Observable
-from reactivex.subject import Subject
-
 from ..core import ReactiveComponent
 from ..logging import SmartGraphLogger
+import litellm
 
+logger = SmartGraphLogger.get_logger()
 
 class CompletionComponent(ReactiveComponent):
     def __init__(self, name: str, model: str, **kwargs):
         super().__init__(name)
         self.model = model
         self.kwargs = kwargs
-        self.logger = SmartGraphLogger.get_logger()
 
-    def process(self, input_data: Dict[str, Any]) -> Observable:
-        subject = Subject()
-
-        async def run_completion():
-            try:
-                messages = [{"role": "user", "content": input_data["message"]}]
-                self.logger.info(f"Sending request to {self.model} with message: {messages}")
-
-                response = await litellm.acompletion(
-                    model=self.model, messages=messages, **self.kwargs
-                )
-
-                if self.kwargs.get("stream", False):
-                    async for chunk in response:
-                        if chunk and chunk.choices and chunk.choices[0].delta.content:
-                            subject.on_next({"ai_response": chunk.choices[0].delta.content})
-                else:
-                    if response and response.choices and response.choices[0].message:
-                        subject.on_next({"ai_response": response.choices[0].message.content})
-                    else:
-                        subject.on_next({"ai_response": "No response generated"})
-
-                subject.on_completed()
-            except Exception as e:
-                self.logger.error(f"Error in CompletionComponent: {str(e)}")
-                subject.on_error(e)
-
-        asyncio.create_task(run_completion())
-        return subject
+    async def process(self, input_data: dict) -> dict:
+        logger.info(f"CompletionComponent received: {input_data}")
+        try:
+            # Check for 'content' key (from TextInputHandler) or 'message' key
+            content = input_data.get('content') or input_data.get('message')
+            if not content:
+                raise ValueError("Input data must contain either a 'content' or 'message' key")
+            
+            messages = [{"role": "user", "content": content}]
+            logger.info(f"Sending request to {self.model} with messages: {messages}")
+            
+            response = await litellm.acompletion(
+                model=self.model,
+                messages=messages,
+                **self.kwargs
+            )
+            
+            logger.info(f"Received response from API: {response}")
+            
+            if response and response.choices and response.choices[0].message:
+                result = {"ai_response": response.choices[0].message.content}
+                logger.info(f"CompletionComponent processing: {result}")
+                return result
+            else:
+                logger.warning("Received empty or invalid response from API")
+                return {"ai_response": "No valid response received"}
+        except Exception as e:
+            logger.error(f"Error in CompletionComponent: {str(e)}", exc_info=True)
+            return {"error": str(e)}

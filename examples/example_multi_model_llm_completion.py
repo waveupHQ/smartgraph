@@ -27,11 +27,20 @@ async def process_input(completion: CompletionComponent, input_text: str) -> Non
         print(f"\nAn unexpected error occurred: {str(e)}\n")
 
 async def main():
+    models = ["gpt-4o-mini", "gpt-3.5-turbo", "gpt-4"]  # Add or remove models as needed
+    
+    print("Available models:")
+    for i, model in enumerate(models, 1):
+        print(f"{i}. {model}")
+    
+    model_choice = int(input("Select a model (enter the number): ")) - 1
+    temperature = float(input("Enter temperature (0.0 to 1.0): "))
+
     # Create a CompletionComponent
     completion = CompletionComponent(
         "AI_Completion", 
-        model="gpt-4o-mini", 
-        temperature=0.7, 
+        model=models[model_choice], 
+        temperature=temperature, 
         api_key=os.getenv("OPENAI_API_KEY")
     )
 
