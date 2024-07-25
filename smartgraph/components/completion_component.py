@@ -1,9 +1,12 @@
 import asyncio
-from ..core import ReactiveComponent
-from ..logging import SmartGraphLogger
+
 import litellm
 
+from ..core import ReactiveComponent
+from ..logging import SmartGraphLogger
+
 logger = SmartGraphLogger.get_logger()
+
 
 class CompletionComponent(ReactiveComponent):
     def __init__(self, name: str, model: str, **kwargs):
@@ -15,21 +18,17 @@ class CompletionComponent(ReactiveComponent):
         logger.info(f"CompletionComponent received: {input_data}")
         try:
             # Check for 'content' key (from TextInputHandler) or 'message' key
-            content = input_data.get('content') or input_data.get('message')
+            content = input_data.get("content") or input_data.get("message")
             if not content:
                 raise ValueError("Input data must contain either a 'content' or 'message' key")
-            
+
             messages = [{"role": "user", "content": content}]
             logger.info(f"Sending request to {self.model} with messages: {messages}")
-            
-            response = await litellm.acompletion(
-                model=self.model,
-                messages=messages,
-                **self.kwargs
-            )
-            
+
+            response = await litellm.acompletion(model=self.model, messages=messages, **self.kwargs)
+
             logger.info(f"Received response from API: {response}")
-            
+
             if response and response.choices and response.choices[0].message:
                 result = {"ai_response": response.choices[0].message.content}
                 logger.info(f"CompletionComponent processing: {result}")
