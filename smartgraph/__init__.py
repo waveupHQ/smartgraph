@@ -1,7 +1,6 @@
 # smartgraph/__init__.py
 
 # Import all components
-from .assistant_conversation import ReactiveAssistantConversation
 from .components import *
 from .core import Pipeline, ReactiveComponent, ReactiveSmartGraph
 from .exceptions import (
@@ -33,7 +32,6 @@ __core_classes__ = [
     "MemoryError",
     "GraphStructureError",
     "GraphVisualizer",
-    "ReactiveAssistantConversation",
 ]
 
 # Combine core classes, components, and toolkits
