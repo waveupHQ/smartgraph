@@ -22,9 +22,9 @@ def create_pipeline():
     input_handler = TextInputHandler("TextInput")
     completion_component = CompletionComponent(
         "GPT_Completion",
-        model="gpt-4o-mini",
+        model="claude-3-haiku-20240307",
         temperature=0.7,
-        api_key=os.getenv("OPENAI_API_KEY"),
+        api_key=os.getenv("ANTHROPIC_API_KEY"),
         system_context="You are a helpful assistant specialized in Python programming.",
         max_tokens=4000,
     )
