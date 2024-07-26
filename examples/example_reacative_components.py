@@ -3,7 +3,7 @@
 import asyncio
 import os
 import time
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from dotenv import load_dotenv
 
@@ -17,28 +17,38 @@ load_dotenv()
 logger = SmartGraphLogger.get_logger()
 logger.set_level("DEBUG")
 
-async def simulate_api_call(completion_component: CompletionComponent, input_text: str) -> Dict[str, Any]:
+
+async def simulate_api_call(
+    completion_component: CompletionComponent, input_text: str
+) -> Dict[str, Any]:
     logger.info(f"Processing input: {input_text}")
     start_time = time.time()
     result = await completion_component.process({"message": input_text})
     end_time = time.time()
-    result['processing_time'] = end_time - start_time
+    result["processing_time"] = end_time - start_time
     return result
+
 
 async def process_inputs_sequentially(completion_component: CompletionComponent, inputs: List[str]):
     for input_text in inputs:
         result = await simulate_api_call(completion_component, input_text)
         print(f"Input: {input_text}")
-        print(f"Output: {result.get('ai_response', 'Error: ' + result.get('error', 'Unknown error'))}")
+        print(
+            f"Output: {result.get('ai_response', 'Error: ' + result.get('error', 'Unknown error'))}"
+        )
         print(f"Processing time: {result['processing_time']:.2f} seconds\n")
+
 
 async def process_inputs_concurrently(completion_component: CompletionComponent, inputs: List[str]):
     tasks = [simulate_api_call(completion_component, input_text) for input_text in inputs]
     results = await asyncio.gather(*tasks)
-    for input_text, result in zip(inputs, results):
+    for input_text, result in zip(inputs, results, strict=False):
         print(f"Input: {input_text}")
-        print(f"Output: {result.get('ai_response', 'Error: ' + result.get('error', 'Unknown error'))}")
+        print(
+            f"Output: {result.get('ai_response', 'Error: ' + result.get('error', 'Unknown error'))}"
+        )
         print(f"Processing time: {result['processing_time']:.2f} seconds\n")
+
 
 async def run_example():
     # Initialize CompletionComponent
@@ -79,23 +89,29 @@ async def run_example():
     history = completion_component.get_conversation_history()
     print("Conversation History:")
     for entry in history:
-        print(f"{entry['role']}: {entry['content'][:50]}...")  # Print first 50 characters of each message
+        print(
+            f"{entry['role']}: {entry['content'][:50]}..."
+        )  # Print first 50 characters of each message
 
     # Clear conversation history
     completion_component.clear_conversation_history()
     print("\nConversation history cleared.")
 
     # Demonstrate processing after clearing history
-    result = await simulate_api_call(completion_component, "Summarize what we've discussed about Python.")
+    result = await simulate_api_call(
+        completion_component, "Summarize what we've discussed about Python."
+    )
     print("After clearing history:")
     print(f"Output: {result.get('ai_response', 'Error: ' + result.get('error', 'Unknown error'))}")
     print(f"Processing time: {result['processing_time']:.2f} seconds")
+
 
 async def main():
     try:
         await run_example()
     except Exception as e:
         logger.error(f"An error occurred: {str(e)}", exc_info=True)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
