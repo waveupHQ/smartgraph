@@ -70,9 +70,6 @@ def create_ai_graph() -> ReactiveSmartGraph:
     return graph
 
 
-# examples/reactive_ai_component.py
-
-
 async def main():
     # Usage
     graph = create_ai_graph()

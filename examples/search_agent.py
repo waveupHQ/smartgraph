@@ -1,11 +1,11 @@
-# examples/reactive_conversation_with_toolkit.py
+# examples/search_agent.py
 
 import asyncio
 import os
 
 from dotenv import load_dotenv
 
-from smartgraph import ReactiveAssistantConversation
+from smartgraph.components import CompletionComponent
 from smartgraph.logging import SmartGraphLogger
 from smartgraph.tools.tavily_toolkit import TavilyToolkit
 
@@ -20,6 +20,20 @@ logger.set_level("INFO")  # Set to "DEBUG" for more detailed logging
 DEBUG_MODE = False
 
 
+async def process_question(assistant: CompletionComponent, question: str) -> str:
+    try:
+        logger.info(f"Processing user input: {question}")
+        result = await assistant.process({"message": question})
+        if "error" in result:
+            logger.error(f"Error during processing: {result['error']}")
+            return "I'm sorry, but I encountered an error while processing your question. Please try again later."
+        else:
+            return result.get("ai_response", "No response generated.")
+    except Exception as e:
+        logger.error(f"Error processing question: {str(e)}", exc_info=True)
+        return "I'm sorry, but I encountered an error while processing your question. Please try again later."
+
+
 async def main():
     try:
         # Check for API keys
@@ -30,18 +44,20 @@ async def main():
             return
 
         # Initialize TavilyToolkit
-        tavily_toolkit = TavilyToolkit()
+        tavily_toolkit = TavilyToolkit(api_key=os.getenv("TAVILY_API_KEY"))
         logger.info("TavilyToolkit initialized successfully")
 
-        # Initialize ReactiveAssistantConversation with Tavily toolkit
-        assistant = ReactiveAssistantConversation(
+        # Initialize CompletionComponent with Tavily toolkit
+        assistant = CompletionComponent(
             name="Search Assistant",
-            toolkits=[tavily_toolkit],
             model="gpt-4o-mini",
             api_key=os.getenv("OPENAI_API_KEY"),
-            debug_mode=DEBUG_MODE,
+            toolkits=[tavily_toolkit],
+            system_context="You are a helpful assistant that can search the internet for information.",
+            temperature=0.7,
+            max_tokens=150,  # Adjust as needed
         )
-        logger.info("ReactiveAssistantConversation initialized successfully")
+        logger.info("CompletionComponent initialized successfully")
 
         # Example usage
         questions = [
@@ -52,15 +68,8 @@ async def main():
 
         for question in questions:
             print(f"\nUser: {question}")
-            logger.info(f"Processing user input: {question}")
-            try:
-                response = await assistant.process(question)
-                print(f"Assistant: {response}")
-            except Exception as e:
-                logger.error(f"Error processing question: {str(e)}", exc_info=True)
-                print(
-                    "Assistant: I'm sorry, but I encountered an error while processing your question. Please try again later."
-                )
+            response = await process_question(assistant, question)
+            print(f"Assistant: {response}")
 
     except Exception as e:
         logger.error(f"An unexpected error occurred: {str(e)}", exc_info=True)
