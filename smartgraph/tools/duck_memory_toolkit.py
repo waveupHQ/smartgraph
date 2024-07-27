@@ -64,8 +64,8 @@ class DuckMemoryToolkit(Toolkit):
             {
                 "key": row[0],
                 "value": json.loads(row[1]),
-                "created_at": row[2],
-                "updated_at": row[3]
+                "created_at": row[2].isoformat() if row[2] else None,
+                "updated_at": row[3].isoformat() if row[3] else None
             }
             for row in results
         ]

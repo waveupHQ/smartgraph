@@ -93,17 +93,29 @@ async def run_example():
             f"{entry['role']}: {entry['content'][:50]}..."
         )  # Print first 50 characters of each message
 
-    # Clear conversation history
+   # After clearing the history
     completion_component.clear_conversation_history()
     print("\nConversation history cleared.")
 
-    # Demonstrate processing after clearing history
+    # Print the cleared history
+    cleared_history = completion_component.get_conversation_history()
+    print("Cleared Conversation History:")
+    for entry in cleared_history:
+        print(f"{entry['role']}: {entry['content'][:50]}...")
+
+    # Process a new query
     result = await simulate_api_call(
         completion_component, "Summarize what we've discussed about Python."
     )
     print("After clearing history:")
     print(f"Output: {result.get('ai_response', 'Error: ' + result.get('error', 'Unknown error'))}")
     print(f"Processing time: {result['processing_time']:.2f} seconds")
+
+    # Print the history again to see if it only contains the new query
+    final_history = completion_component.get_conversation_history()
+    print("\nFinal Conversation History:")
+    for entry in final_history:
+        print(f"{entry['role']}: {entry['content'][:50]}...")
 
 
 async def main():

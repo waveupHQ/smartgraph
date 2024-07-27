@@ -30,7 +30,7 @@ class CompletionComponent(ReactiveComponent):
         self.system_context = system_context
         self.max_tokens = max_tokens or 5000
         self.kwargs = kwargs
-        self.conversation_history: List[Dict[str, str]] = []
+        self.conversation_history = [{"role": "system", "content": self.system_context}]
         self.toolkits = toolkits or []
         self.stream = stream
 
@@ -43,6 +43,7 @@ class CompletionComponent(ReactiveComponent):
             if not content:
                 raise ValueError("Input data must contain either a 'content' or 'message' key")
 
+            self.conversation_history.append({"role": "user", "content": content})
             messages = self._prepare_messages(content)
             trimmed_messages = trim_messages(messages, self.model, self.max_tokens)
 
@@ -50,7 +51,9 @@ class CompletionComponent(ReactiveComponent):
                 return self._stream_llm_call(trimmed_messages)
             else:
                 response = await self._llm_call(trimmed_messages)
-                return await self._handle_llm_response(response.choices[0].message, messages)
+                result = await self._handle_llm_response(response.choices[0].message, messages)
+                self.conversation_history.append({"role": "assistant", "content": result["ai_response"]})
+                return result
         except Exception as e:
             logger.error(f"Error in CompletionComponent: {str(e)}", exc_info=True)
             return {"error": str(e)}
@@ -117,18 +120,17 @@ class CompletionComponent(ReactiveComponent):
         raise ValueError(f"Tool {function_name} not found in any toolkit")
 
     def _prepare_messages(self, new_content: str) -> List[Dict[str, str]]:
-        messages = []
-        if self.system_context:
-            messages.append({"role": "system", "content": self.system_context})
-        messages.extend(self.conversation_history)
-        messages.append({"role": "user", "content": new_content})
+        messages = [{"role": "system", "content": self.system_context}]
+        messages.extend(self.conversation_history[1:])  # Skip the system message in conversation_history
+        if new_content:
+            messages.append({"role": "user", "content": new_content})
         return messages
-
     def set_system_context(self, context: str):
         self.system_context = context
+        self.conversation_history[0] = {"role": "system", "content": self.system_context}
 
     def clear_conversation_history(self):
-        self.conversation_history.clear()
+        self.conversation_history = [{"role": "system", "content": self.system_context}]
 
     def set_max_tokens(self, max_tokens: int):
         self.max_tokens = max_tokens
