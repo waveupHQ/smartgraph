@@ -4,10 +4,12 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 from reactivex import Observable
+from reactivex import operators as ops
 from reactivex.subject import BehaviorSubject, Subject
 
 from .exceptions import CompilationError, ConfigurationError, ExecutionError
 from .logging import SmartGraphLogger
+from .utils import process_observable
 
 logger = SmartGraphLogger.get_logger()
 
@@ -44,7 +46,7 @@ class ReactiveComponent:
         if key in self._states:
             self._states[key].on_next(value)
 
-    def process(self, input_data: Any) -> Any:
+    async def process(self, input_data: Any) -> Any:
         raise NotImplementedError("Subclasses must implement process method")
 
 
@@ -244,28 +246,42 @@ class ReactiveSmartGraph:
                                 (target["target_pipeline"], target["target_component"], depth + 1)
                             )
 
-    def execute(self, pipeline_name: str, input_data: Any) -> Observable:
+    def execute(self, pipeline_name: str, input_data: Any, timeout: Optional[float] = None) -> Observable:
         if not self.is_compiled:
-            raise CompilationError("Graph must be compiled before execution")
+            return Observable.throw(CompilationError("Graph must be compiled before execution"))
 
         if pipeline_name not in self.pipelines:
-            raise ConfigurationError(f"Pipeline {pipeline_name} does not exist")
+            return Observable.throw(ConfigurationError(f"Pipeline {pipeline_name} does not exist"))
 
         pipeline = self.pipelines[pipeline_name]
-        first_component = next(iter(pipeline.components.values()))
-        last_component = list(pipeline.components.values())[-1]
 
         def subscribe(observer, scheduler=None):
-            def on_next(value):
-                observer.on_next(value)
+            async def process_pipeline():
+                try:
+                    current_data = input_data
+                    for component in pipeline.components.values():
+                        if asyncio.iscoroutinefunction(component.process):
+                            current_data = await component.process(current_data)
+                        else:
+                            current_data = component.process(current_data)
+                    observer.on_next(current_data)
+                    observer.on_completed()
+                except Exception as e:
+                    observer.on_error(e)
 
-            def on_error(error):
-                observer.on_error(error)
-
-            def on_completed():
-                observer.on_completed()
-
-            last_component.output.subscribe(on_next, on_error, on_completed)
-            first_component.input.on_next(input_data)
+            task = asyncio.create_task(process_pipeline())
+            
+            if timeout is not None:
+                asyncio.create_task(self._cancel_after_timeout(task, timeout, observer))
 
         return Observable(subscribe)
+
+    async def _cancel_after_timeout(self, task, timeout, observer):
+        await asyncio.sleep(timeout)
+        if not task.done():
+            task.cancel()
+            observer.on_error(TimeoutError(f"Execution timed out after {timeout} seconds"))
+
+    async def execute_and_await(self, pipeline_name: str, input_data: Any, timeout: Optional[float] = None) -> Any:
+        observable = self.execute(pipeline_name, input_data, timeout)
+        return await process_observable(observable)

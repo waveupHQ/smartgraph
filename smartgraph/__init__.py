@@ -17,6 +17,7 @@ from .logging import SmartGraphLogger
 # Import all toolkits
 from .tools import *
 from .tools.memory_toolkit import MemoryToolkit
+from .utils import process_observable
 
 # List of core classes
 __core_classes__ = [
@@ -63,6 +64,7 @@ __all__ = __core_classes__ + [
     "MemoryToolkit",
     "DuckDuckGoToolkit",
     "TavilyToolkit",
+    "process_observable"
 ]
 
 __version__ = "0.0.3"
