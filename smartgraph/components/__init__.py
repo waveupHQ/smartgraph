@@ -1,4 +1,5 @@
 # smartgraph/components/__init__.py
+from .branching_component import BranchingComponent
 from .completion_component import CompletionComponent
 from .input_handlers import (
     BaseInputHandler,
@@ -18,7 +19,6 @@ from .input_handlers import (
 from .processing import (
     AggregatorComponent,
     AsyncAPIComponent,
-    BranchingComponent,
     CacheComponent,
     FilterComponent,
     RetryComponent,

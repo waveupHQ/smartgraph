@@ -34,19 +34,6 @@ class TransformerComponent(ReactiveComponent):
         return self.transform_func(input_data)
 
 
-class BranchingComponent(ReactiveComponent):
-    def __init__(self, name: str, condition: Callable[[Any], bool]):
-        super().__init__(name)
-        self.condition = condition
-
-    async def process(self, input_data: Any) -> Dict[str, Any]:
-        await asyncio.sleep(0.1)
-        if self.condition(input_data):
-            return {"true_branch": input_data}
-        else:
-            return {"false_branch": input_data}
-
-
 class AsyncAPIComponent(ReactiveComponent):
     def __init__(self, name: str, api_call: Callable[[Any], Any]):
         super().__init__(name)
