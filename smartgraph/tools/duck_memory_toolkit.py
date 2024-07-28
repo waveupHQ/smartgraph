@@ -1,22 +1,25 @@
 import json
-from typing import Any, Dict, List, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import duckdb
 
 from .base_toolkit import Toolkit
 
+
 class DuckMemoryToolkit(Toolkit):
     def __init__(self, db_path: str = ":memory:"):
         self.conn = duckdb.connect(db_path)
-        self.conn.execute("""
+        self.conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS memories (
                 key VARCHAR PRIMARY KEY,
                 value JSON,
                 created_at TIMESTAMP,
                 updated_at TIMESTAMP
             )
-        """)
+        """
+        )
 
     @property
     def name(self) -> str:
@@ -38,13 +41,16 @@ class DuckMemoryToolkit(Toolkit):
     async def add_memory(self, key: str, value: Any) -> None:
         json_value = json.dumps(value)
         current_time = datetime.now().isoformat()
-        self.conn.execute("""
+        self.conn.execute(
+            """
             INSERT INTO memories (key, value, created_at, updated_at)
             VALUES (?, ?, ?, ?)
             ON CONFLICT (key) DO UPDATE SET
                 value = excluded.value,
                 updated_at = ?
-        """, [key, json_value, current_time, current_time, current_time])
+        """,
+            [key, json_value, current_time, current_time, current_time],
+        )
 
     async def get_memory(self, key: str) -> Optional[Any]:
         result = self.conn.execute("SELECT value FROM memories WHERE key = ?", [key]).fetchone()
@@ -54,18 +60,21 @@ class DuckMemoryToolkit(Toolkit):
 
     async def search_memories(self, query: str) -> List[Dict[str, Any]]:
         # Use JSON extraction to search within the value column
-        results = self.conn.execute("""
+        results = self.conn.execute(
+            """
             SELECT key, value, created_at, updated_at
             FROM memories
             WHERE key LIKE ? OR json_extract(value, '$') LIKE ?
-        """, [f'%{query}%', f'%{query}%']).fetchall()
-        
+        """,
+            [f"%{query}%", f"%{query}%"],
+        ).fetchall()
+
         return [
             {
                 "key": row[0],
                 "value": json.loads(row[1]),
                 "created_at": row[2].isoformat() if row[2] else None,
-                "updated_at": row[3].isoformat() if row[3] else None
+                "updated_at": row[3].isoformat() if row[3] else None,
             }
             for row in results
         ]
@@ -84,12 +93,15 @@ class DuckMemoryToolkit(Toolkit):
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "key": {"type": "string", "description": "The unique identifier for the memory"},
-                            "value": {"type": "object", "description": "The content of the memory"}
+                            "key": {
+                                "type": "string",
+                                "description": "The unique identifier for the memory",
+                            },
+                            "value": {"type": "object", "description": "The content of the memory"},
                         },
-                        "required": ["key", "value"]
-                    }
-                }
+                        "required": ["key", "value"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -99,11 +111,14 @@ class DuckMemoryToolkit(Toolkit):
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "key": {"type": "string", "description": "The unique identifier for the memory to retrieve"}
+                            "key": {
+                                "type": "string",
+                                "description": "The unique identifier for the memory to retrieve",
+                            }
                         },
-                        "required": ["key"]
-                    }
-                }
+                        "required": ["key"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -113,11 +128,14 @@ class DuckMemoryToolkit(Toolkit):
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "query": {"type": "string", "description": "The search query to match against memory contents"}
+                            "query": {
+                                "type": "string",
+                                "description": "The search query to match against memory contents",
+                            }
                         },
-                        "required": ["query"]
-                    }
-                }
+                        "required": ["query"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -127,10 +145,13 @@ class DuckMemoryToolkit(Toolkit):
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "key": {"type": "string", "description": "The unique identifier for the memory to delete"}
+                            "key": {
+                                "type": "string",
+                                "description": "The unique identifier for the memory to delete",
+                            }
                         },
-                        "required": ["key"]
-                    }
-                }
-            }
+                        "required": ["key"],
+                    },
+                },
+            },
         ]

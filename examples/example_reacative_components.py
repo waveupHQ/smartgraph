@@ -93,7 +93,7 @@ async def run_example():
             f"{entry['role']}: {entry['content'][:50]}..."
         )  # Print first 50 characters of each message
 
-   # After clearing the history
+    # After clearing the history
     completion_component.clear_conversation_history()
     print("\nConversation history cleared.")
 

@@ -64,7 +64,7 @@ __all__ = __core_classes__ + [
     "MemoryToolkit",
     "DuckDuckGoToolkit",
     "TavilyToolkit",
-    "process_observable"
+    "process_observable",
 ]
 
 __version__ = "0.0.3"

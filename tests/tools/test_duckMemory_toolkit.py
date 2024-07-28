@@ -1,10 +1,14 @@
-import pytest
 from datetime import datetime, timedelta
+
+import pytest
+
 from smartgraph.tools.duck_memory_toolkit import DuckMemoryToolkit
+
 
 @pytest.fixture
 def duck_memory_toolkit():
     return DuckMemoryToolkit(":memory:")
+
 
 @pytest.mark.asyncio
 async def test_duck_memory_toolkit(duck_memory_toolkit):
@@ -31,6 +35,7 @@ async def test_duck_memory_toolkit(duck_memory_toolkit):
     result = await duck_memory_toolkit.get_memory("test_key")
     assert result is None
 
+
 def test_memory_toolkit_schemas(duck_memory_toolkit):
     schemas = duck_memory_toolkit.schemas
     assert len(schemas) == 4
@@ -55,6 +60,7 @@ def test_memory_toolkit_schemas(duck_memory_toolkit):
     delete_memory_schema = next(s for s in schemas if s["function"]["name"] == "delete_memory")
     assert delete_memory_schema["type"] == "function"
     assert "key" in delete_memory_schema["function"]["parameters"]["properties"]
+
 
 @pytest.mark.asyncio
 async def test_memory_toolkit_functions(duck_memory_toolkit):

@@ -25,6 +25,7 @@ async def process_observable(observable: Observable) -> Any:
 
     return await future
 
+
 # This code defines an asynchronous function called `process_observable` that takes an Observable as input.
 # It creates an asyncio Future object to handle the asynchronous operation.
 # The function sets up three callback functions: on_next, on_error, and on_completed.

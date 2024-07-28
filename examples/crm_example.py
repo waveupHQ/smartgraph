@@ -9,7 +9,9 @@ class RefinedCRMSystem:
     def __init__(self):
         self.memory = DuckMemoryToolkit("new_crm_database.duckdb")
 
-    async def add_customer(self, customer_id: str, name: str, email: str, company: str, created_at: str = None):  # noqa: PLR0913
+    async def add_customer(
+        self, customer_id: str, name: str, email: str, company: str, created_at: str = None
+    ):  # noqa: PLR0913
         customer_data = {
             "name": name,
             "email": email,
@@ -17,7 +19,7 @@ class RefinedCRMSystem:
             "created_at": created_at or datetime.now().isoformat(),
             "last_contact": None,
             "notes": [],
-            "deals": []
+            "deals": [],
         }
         await self.memory.add_memory(f"customer:{customer_id}", customer_data)
         print(f"Added customer: {name} from {company}")
@@ -32,14 +34,16 @@ class RefinedCRMSystem:
         else:
             print(f"Customer with ID {customer_id} not found")
 
-    async def add_deal(self, customer_id: str, deal_name: str, value: float, created_at: str = None):
+    async def add_deal(
+        self, customer_id: str, deal_name: str, value: float, created_at: str = None
+    ):
         customer = await self.memory.get_memory(f"customer:{customer_id}")
         if customer:
             deal = {
                 "name": deal_name,
                 "value": value,
                 "status": "Pending",
-                "created_at": created_at or datetime.now().isoformat()
+                "created_at": created_at or datetime.now().isoformat(),
             }
             customer["deals"].append(deal)
             await self.memory.add_memory(f"customer:{customer_id}", customer)
@@ -62,8 +66,8 @@ class RefinedCRMSystem:
         high_value_customers = []
         for result in all_customers:
             customer = result["value"]
-            for deal in customer['deals']:
-                if deal['value'] > threshold:
+            for deal in customer["deals"]:
+                if deal["value"] > threshold:
                     high_value_customers.append(customer)
                     print(f"High-value deal found for {customer['name']}:")
                     self._print_customer_info(customer)
@@ -78,10 +82,14 @@ class RefinedCRMSystem:
         threshold_date = datetime.now() - timedelta(hours=hours)
         for result in all_customers:
             customer = result["value"]
-            last_contact = datetime.fromisoformat(customer['last_contact']) if customer['last_contact'] else None
+            last_contact = (
+                datetime.fromisoformat(customer["last_contact"])
+                if customer["last_contact"]
+                else None
+            )
             if not last_contact or last_contact < threshold_date:
                 followup_customers.append(customer)
-                print(f"Customer needing follow-up:")
+                print("Customer needing follow-up:")
                 self._print_customer_info(customer)
         return followup_customers
 
@@ -105,13 +113,27 @@ async def main():
 
     print("Initializing CRM System...")
     # Add customers with specific creation dates
-    await crm.add_customer("001", "John Doe", "john@techcorp.com", "TechCorp", created_at="2024-07-20T10:00:00")
-    await crm.add_customer("002", "Jane Smith", "jane@innovatesolutions.com", "Innovate Solutions", created_at="2024-07-22T14:00:00")
-    await crm.add_customer("003", "Bob Johnson", "bob@megasoft.com", "MegaSoft", created_at="2024-07-24T09:00:00")
+    await crm.add_customer(
+        "001", "John Doe", "john@techcorp.com", "TechCorp", created_at="2024-07-20T10:00:00"
+    )
+    await crm.add_customer(
+        "002",
+        "Jane Smith",
+        "jane@innovatesolutions.com",
+        "Innovate Solutions",
+        created_at="2024-07-22T14:00:00",
+    )
+    await crm.add_customer(
+        "003", "Bob Johnson", "bob@megasoft.com", "MegaSoft", created_at="2024-07-24T09:00:00"
+    )
 
     # Update customer contacts with specific times
-    await crm.update_customer_contact("001", "Discussed new project requirements", contact_time="2024-07-25T11:00:00")
-    await crm.update_customer_contact("002", "Scheduled demo for next week", contact_time="2024-07-26T13:00:00")
+    await crm.update_customer_contact(
+        "001", "Discussed new project requirements", contact_time="2024-07-25T11:00:00"
+    )
+    await crm.update_customer_contact(
+        "002", "Scheduled demo for next week", contact_time="2024-07-26T13:00:00"
+    )
     # Note: Bob Johnson is intentionally left without a contact update
 
     # Add deals
@@ -127,6 +149,7 @@ async def main():
 
     print("\n3. Customers needing follow-up (not contacted in the last 48 hours):")
     await crm.get_customers_needing_followup(48)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

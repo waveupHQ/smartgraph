@@ -14,6 +14,7 @@ from ..logging import SmartGraphLogger
 
 logger = SmartGraphLogger.get_logger()
 
+
 class BaseInputHandler(ReactiveComponent):
     async def process(self, input_data: Any) -> Dict[str, Any]:
         try:
@@ -28,6 +29,7 @@ class BaseInputHandler(ReactiveComponent):
     def _get_type(self) -> str:
         return self.__class__.__name__.lower().replace("inputhandler", "")
 
+
 class TextInputHandler(BaseInputHandler):
     async def _handle_input(self, input_data: str) -> Dict[str, Any]:
         return {
@@ -37,6 +39,7 @@ class TextInputHandler(BaseInputHandler):
             "word_count": len(input_data.split()),
         }
 
+
 class FileUploadHandler(BaseInputHandler):
     def __init__(self, name: str, allowed_extensions: Optional[List[str]] = None):
         super().__init__(name)
@@ -44,8 +47,12 @@ class FileUploadHandler(BaseInputHandler):
 
     async def _handle_input(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         filename = input_data.get("filename", "")
-        if self.allowed_extensions and not any(filename.endswith(ext) for ext in self.allowed_extensions):
-            raise ValueError(f"Unsupported file type. Allowed types: {', '.join(self.allowed_extensions)}")
+        if self.allowed_extensions and not any(
+            filename.endswith(ext) for ext in self.allowed_extensions
+        ):
+            raise ValueError(
+                f"Unsupported file type. Allowed types: {', '.join(self.allowed_extensions)}"
+            )
         return {
             "type": "file",
             "filename": filename,
@@ -53,18 +60,22 @@ class FileUploadHandler(BaseInputHandler):
             "size": len(input_data.get("content", "")),
         }
 
+
 class ImageUploadHandler(FileUploadHandler):
     def __init__(self, name: str):
         super().__init__(name, allowed_extensions=[".jpg", ".jpeg", ".png", ".gif"])
 
     async def _handle_input(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         result = await super()._handle_input(input_data)
-        result.update({
-            "type": "image",
-            "dimensions": "1024x768",  # Placeholder
-            "format": "jpeg",
-        })
+        result.update(
+            {
+                "type": "image",
+                "dimensions": "1024x768",  # Placeholder
+                "format": "jpeg",
+            }
+        )
         return result
+
 
 class VideoUploadHandler(FileUploadHandler):
     def __init__(self, name: str):
@@ -72,12 +83,15 @@ class VideoUploadHandler(FileUploadHandler):
 
     async def _handle_input(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         result = await super()._handle_input(input_data)
-        result.update({
-            "type": "video",
-            "duration": "00:05:30",  # Placeholder
-            "resolution": "1920x1080",
-        })
+        result.update(
+            {
+                "type": "video",
+                "duration": "00:05:30",  # Placeholder
+                "resolution": "1920x1080",
+            }
+        )
         return result
+
 
 class SpeechInputHandler(BaseInputHandler):
     async def _handle_input(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -87,6 +101,7 @@ class SpeechInputHandler(BaseInputHandler):
             "duration": input_data.get("duration", "00:00:00"),
             "language": input_data.get("language", "en-US"),
         }
+
 
 class CommandLineInputHandler(BaseInputHandler):
     async def _handle_input(self, input_data: str) -> Dict[str, Any]:
@@ -123,8 +138,9 @@ class CommandLineInputHandler(BaseInputHandler):
             "type": "command",
             "command": parts[0] if parts else "",
             "args": parts[1:],
-            "full_input": input_data
+            "full_input": input_data,
         }
+
 
 class JSONInputHandler(BaseInputHandler):
     async def _handle_input(self, input_data: str) -> Dict[str, Any]:
@@ -132,6 +148,7 @@ class JSONInputHandler(BaseInputHandler):
             return {"type": "json", "parsed_data": json.loads(input_data)}
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse JSON: {str(e)}")
+
 
 class XMLInputHandler(BaseInputHandler):
     async def _handle_input(self, input_data: str) -> Dict[str, Any]:
@@ -147,18 +164,17 @@ class XMLInputHandler(BaseInputHandler):
                 result[child.tag] = self._element_to_dict(child)
         return result
 
+
 class CSVInputHandler(BaseInputHandler):
     async def _handle_input(self, input_data: str) -> Dict[str, Any]:
         csv_data = csv.DictReader(StringIO(input_data))
-        return {
-            "type": "csv",
-            "parsed_data": list(csv_data),
-            "headers": csv_data.fieldnames
-        }
+        return {"type": "csv", "parsed_data": list(csv_data), "headers": csv_data.fieldnames}
+
 
 class YAMLInputHandler(BaseInputHandler):
     async def _handle_input(self, input_data: str) -> Dict[str, Any]:
         return {"type": "yaml", "parsed_data": yaml.safe_load(input_data)}
+
 
 class ParquetInputHandler(BaseInputHandler):
     async def _handle_input(self, input_data: Union[bytes, BytesIO]) -> Dict[str, Any]:
@@ -173,6 +189,7 @@ class ParquetInputHandler(BaseInputHandler):
             "num_rows": len(df),
             "num_columns": len(df.columns),
         }
+
 
 class StructuredDataDetector(BaseInputHandler):
     def __init__(self, name: str):

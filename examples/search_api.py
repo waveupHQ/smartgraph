@@ -1,12 +1,14 @@
 import asyncio
 import os
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
 from smartgraph import ReactiveSmartGraph
 from smartgraph.components import CompletionComponent
-from smartgraph.tools.duckduckgo_toolkit import DuckDuckGoToolkit
 from smartgraph.logging import SmartGraphLogger
+from smartgraph.tools.duckduckgo_toolkit import DuckDuckGoToolkit
 
 # Load environment variables
 load_dotenv()
@@ -39,8 +41,10 @@ graph.compile()
 # Create FastAPI app
 app = FastAPI()
 
+
 class SearchQuery(BaseModel):
     query: str
+
 
 @app.post("/search")
 async def search(search_query: SearchQuery):
@@ -51,6 +55,8 @@ async def search(search_query: SearchQuery):
         logger.error(f"An error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail="An error occurred during processing")
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

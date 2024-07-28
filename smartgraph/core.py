@@ -246,7 +246,9 @@ class ReactiveSmartGraph:
                                 (target["target_pipeline"], target["target_component"], depth + 1)
                             )
 
-    def execute(self, pipeline_name: str, input_data: Any, timeout: Optional[float] = None) -> Observable:
+    def execute(
+        self, pipeline_name: str, input_data: Any, timeout: Optional[float] = None
+    ) -> Observable:
         if not self.is_compiled:
             return Observable.throw(CompilationError("Graph must be compiled before execution"))
 
@@ -270,7 +272,7 @@ class ReactiveSmartGraph:
                     observer.on_error(e)
 
             task = asyncio.create_task(process_pipeline())
-            
+
             if timeout is not None:
                 asyncio.create_task(self._cancel_after_timeout(task, timeout, observer))
 
@@ -282,6 +284,8 @@ class ReactiveSmartGraph:
             task.cancel()
             observer.on_error(TimeoutError(f"Execution timed out after {timeout} seconds"))
 
-    async def execute_and_await(self, pipeline_name: str, input_data: Any, timeout: Optional[float] = None) -> Any:
+    async def execute_and_await(
+        self, pipeline_name: str, input_data: Any, timeout: Optional[float] = None
+    ) -> Any:
         observable = self.execute(pipeline_name, input_data, timeout)
         return await process_observable(observable)

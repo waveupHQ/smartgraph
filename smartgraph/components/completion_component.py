@@ -52,7 +52,9 @@ class CompletionComponent(ReactiveComponent):
             else:
                 response = await self._llm_call(trimmed_messages)
                 result = await self._handle_llm_response(response.choices[0].message, messages)
-                self.conversation_history.append({"role": "assistant", "content": result["ai_response"]})
+                self.conversation_history.append(
+                    {"role": "assistant", "content": result["ai_response"]}
+                )
                 return result
         except Exception as e:
             logger.error(f"Error in CompletionComponent: {str(e)}", exc_info=True)
@@ -121,10 +123,13 @@ class CompletionComponent(ReactiveComponent):
 
     def _prepare_messages(self, new_content: str) -> List[Dict[str, str]]:
         messages = [{"role": "system", "content": self.system_context}]
-        messages.extend(self.conversation_history[1:])  # Skip the system message in conversation_history
+        messages.extend(
+            self.conversation_history[1:]
+        )  # Skip the system message in conversation_history
         if new_content:
             messages.append({"role": "user", "content": new_content})
         return messages
+
     def set_system_context(self, context: str):
         self.system_context = context
         self.conversation_history[0] = {"role": "system", "content": self.system_context}
