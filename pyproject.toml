@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "smartgraph"
 version = "0.1.0"
-description = "A library for building stateful, multi-actor applications with Smart Graph"
-authors = ["Your Name <your.email@example.com>"]
+description = "A Python library for building stateful, multi-component applications with Large Language Models (LLMs)."
+authors = ["Jeblister"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "smartgraph"}]
