@@ -48,11 +48,8 @@ class GraphStructureError(SmartGraphException):
         super().__init__(f"Graph structure error: {message}")
 
 
-class ActorExecutionError(SmartGraphException):
-    """Exception raised when there's an error during the execution of an actor's task."""
+class CompilationError(SmartGraphException):
+    """Exception raised when there's an error during the compilation of the SmartGraph."""
 
-    def __init__(self, message: str, actor_name: str | None = None):
-        self.actor_name = actor_name
-        super().__init__(
-            f"Actor execution error{'for ' + actor_name if actor_name else ''}: {message}"
-        )
+    def __init__(self, message: str):
+        super().__init__(f"Compilation error: {message}")

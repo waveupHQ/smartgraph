@@ -1,216 +1,291 @@
-from __future__ import annotations
+# smartgraph/core.py
 
 import asyncio
-import json
-import logging
-import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable, Dict, List, Optional, Tuple, TypeAlias
+from typing import Any, Dict, List, Optional
 
-import jsonpickle
-import matplotlib.pyplot as plt
-import networkx as nx
-from pydantic import BaseModel, ConfigDict, Field
+from reactivex import Observable
+from reactivex import operators as ops
+from reactivex.subject import BehaviorSubject, Subject
 
-from .base import BaseActor, BaseNode, Task
-from .checkpoint_manager import Checkpoint, CheckpointManager
-from .checkpointer import Checkpointer
-from .condition_evaluator import ConditionEvaluator
-from .exceptions import ConfigurationError, ExecutionError, GraphStructureError
-from .graph_utils import GraphUtils
-from .graph_visualizer import GraphVisualizer
+from .exceptions import CompilationError, ConfigurationError, ExecutionError
 from .logging import SmartGraphLogger
-from .memory import MemoryManager, MemoryState
-from .state_manager import StateManager
-from .task_executor import TaskExecutor
-
-# Constants
-DEFAULT_EDGE_WEIGHT = 1.0
-MAX_RESPONSE_LENGTH = 1000  # Maximum length for response storage
-
-# Type aliases
-ReducerFunction: TypeAlias = Callable[[Any, Any], Any]
-
-
-def default_reducer(old_value: Any, new_value: Any) -> Any:
-    return new_value
-
-
-class Node(BaseModel):
-    id: str
-    actor: BaseActor
-    task: Task
-    state_manager: StateManager = Field(default_factory=StateManager)
-    pre_execute: Optional[Callable] = None
-    post_execute: Optional[Callable] = None
-    input_data: Dict[str, Any] = Field(default_factory=dict)
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        self.input_data = input_data
-        try:
-            output = await TaskExecutor.execute_node_task(self)
-            return output
-        except ExecutionError as e:
-            raise ExecutionError(
-                f"Error executing node {self.id}: {str(e)}", node_id=self.id
-            )  # noqa: B904
-
-    async def update_state(self, new_state: Dict[str, Any]) -> None:
-        for key, value in new_state.items():
-            self.state_manager.update_state(key, value)
-
-
-class Edge(BaseModel):
-    source_id: str
-    target_id: str
-    conditions: List[Callable[[Dict[str, Any]], bool]] = Field(default_factory=list)
-    weight: float = 1.0
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    def is_valid(self, data: Dict[str, Any]) -> bool:
-        return ConditionEvaluator.evaluate(self.conditions, data)
-
-    def __hash__(self):  # noqa: D105
-        return hash((self.source_id, self.target_id))
-
-    def __eq__(self, other):  # noqa: D105
-        if isinstance(other, Edge):
-            return self.source_id == other.source_id and self.target_id == other.target_id
-        return False
-
-    @classmethod
-    def with_condition(cls, source_id: str, target_id: str, key: str, value: Any):
-        condition = ConditionEvaluator.create_condition(key, value)
-        return cls(source_id=source_id, target_id=target_id, conditions=[condition])
-
-    @classmethod
-    def with_range_condition(  # noqa: PLR0913
-        cls, source_id: str, target_id: str, key: str, min_value: float, max_value: float
-    ):
-        condition = ConditionEvaluator.create_range_condition(key, min_value, max_value)
-        return cls(source_id=source_id, target_id=target_id, conditions=[condition])
-
+from .utils import process_observable
 
 logger = SmartGraphLogger.get_logger()
 
 
-class SmartGraph(BaseModel):
-    graph: nx.DiGraph = Field(default_factory=nx.DiGraph)
-    memory_manager: MemoryManager = Field(default_factory=MemoryManager)
-    checkpoint_manager: CheckpointManager = Field(default_factory=CheckpointManager)
-    checkpoint_frequency: int = 2  # Save checkpoint every 5 nodes
+class ReactiveComponent:
+    def __init__(self, name: str):
+        self.name = name
+        self._states: Dict[str, BehaviorSubject] = {}
+        self.input: Subject = Subject()
+        self.output: Subject = Subject()
+        self.error: Subject = Subject()
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    async def execute(
-        self, start_node_id: str, input_data: Dict[str, Any], thread_id: str
-    ) -> Tuple[Dict[str, Any], bool]:
-        if start_node_id not in self.graph.nodes:
-            raise GraphStructureError(f"Start node '{start_node_id}' not found in the graph")
+        self.input.subscribe(self._process_input)
 
-        # Load the latest checkpoint if available
-        latest_checkpoint = await self.checkpoint_manager.get_latest_checkpoint(thread_id)
-        if latest_checkpoint:
-            current_node_id = latest_checkpoint.next_nodes[0]
-            self.memory_manager.state = MemoryState.from_dict(latest_checkpoint.state)
-        else:
-            current_node_id = start_node_id
+    def _process_input(self, input_data: Any):
+        logger.debug(f"{self.name} received input: {input_data}")
+        try:
+            result = self.process(input_data)
+            logger.debug(f"{self.name} processed input. Result: {result}")
+            self.output.on_next(result)
+        except Exception as e:
+            logger.error(f"{self.name} failed to process input: {e}")
+            self.error.on_next(e)
 
-        # Load long-term memory
-        await self.memory_manager.load_long_term_memory()
+    def create_state(self, key: str, initial_value: Any) -> BehaviorSubject:
+        if key not in self._states:
+            self._states[key] = BehaviorSubject(initial_value)
+        return self._states[key]
 
-        should_exit = False
-        node_count = 0
-        while not should_exit:
+    def get_state(self, key: str) -> Optional[BehaviorSubject]:
+        return self._states.get(key)
+
+    def update_state(self, key: str, value: Any) -> None:
+        if key in self._states:
+            self._states[key].on_next(value)
+
+    async def process(self, input_data: Any) -> Any:
+        raise NotImplementedError("Subclasses must implement process method")
+
+
+class Pipeline:
+    def __init__(self, name: str):
+        self.name = name
+        self.components: Dict[str, ReactiveComponent] = {}
+        self.connections: Dict[str, List[str]] = {}
+        self.input = Subject()
+        self.output = Subject()
+        self.error = Subject()
+
+    def add_component(self, component: ReactiveComponent):
+        if component.name in self.components:
+            raise ConfigurationError(
+                f"Component {component.name} already exists in pipeline {self.name}"
+            )
+        self.components[component.name] = component
+        self.connections[component.name] = []
+        logger.info(f"Added component {component.name} to pipeline {self.name}")
+
+    def connect_components(self, source: str, target: str):
+        if source not in self.components or target not in self.components:
+            raise ConfigurationError(
+                f"Invalid connection: {source} -> {target} in pipeline {self.name}"
+            )
+        self.connections[source].append(target)
+        logger.info(f"Connected {source} to {target} in pipeline {self.name}")
+
+    def compile(self):
+        for source, targets in self.connections.items():
+            source_component = self.components[source]
+            for target in targets:
+                target_component = self.components[target]
+                source_component.output.subscribe(
+                    target_component.input, lambda error: self.error.on_next(error)
+                )
+
+        first_component = next(iter(self.components.values()))
+        self.input.subscribe(first_component.input)
+
+        last_component = list(self.components.values())[-1]
+        last_component.output.subscribe(self.output)
+
+        logger.info(f"Compiled pipeline {self.name}")
+
+    async def execute(self, input_data: Any) -> Any:
+        logger.info(f"Executing pipeline {self.name} with input: {input_data}")
+        current_data = input_data
+        for component in self.components.values():
             try:
-                # Execute the current node
-                current_node = self.graph.nodes[current_node_id]["node"]
-                node_output = await current_node.execute(input_data)
-
-                # Update the state
-                for key, value in node_output.items():
-                    await self.memory_manager.update_short_term(key, value)
-
-                # Update long-term memory if applicable
-                if "fact" in node_output:
-                    await self.memory_manager.update_long_term("facts", node_output["fact"])
-                if "user_preference" in node_output:
-                    await self.memory_manager.update_long_term("user_preferences", node_output["user_preference"])
-
-                # Check for exit condition
-                if node_output.get("response", "").lower() == "exit":
-                    logger.info("Exit command received. Ending execution.")
-                    should_exit = True
-                    break
-
-                # Find valid edges and next nodes
-                next_node_ids = list(self.graph.successors(current_node_id))
-                if not next_node_ids:
-                    logger.info("No next nodes found. Ending execution.")
-                    should_exit = True
-                    break
-
-                valid_edges = [
-                    self.graph[current_node_id][next_node_id]["edge"]
-                    for next_node_id in next_node_ids
-                    if self.graph[current_node_id][next_node_id]["edge"].is_valid(node_output)
-                ]
-
-                if not valid_edges:
-                    logger.info("No valid edges found. Ending execution.")
-                    should_exit = True
-                    break
-
-                # Save checkpoint if necessary
-                node_count += 1
-                if node_count % self.checkpoint_frequency == 0:
-                    checkpoint = Checkpoint(
-                        node_id=current_node_id,
-                        state=self.memory_manager.state.to_dict(),
-                        next_nodes=[edge.target_id for edge in valid_edges],
-                    )
-                    await self.checkpoint_manager.save_checkpoint(thread_id, checkpoint)
-
-                # Move to the next node
-                current_node_id = valid_edges[0].target_id
-
-                # Update input_data for the next iteration
-                input_data = node_output
-
+                current_data = await component.process(current_data)
             except Exception as e:
-                logger.error(f"Error during execution: {str(e)}")
-                should_exit = True
-                break
+                logger.error(f"Error in component {component.name}: {str(e)}")
+                raise
+        logger.info(f"Pipeline {self.name} execution completed")
+        return current_data
 
-        # Cleanup long-term memory
-        await self.memory_manager.cleanup_long_term_memory()
 
-        return self.memory_manager.state.to_dict(), should_exit
-    def _should_save_checkpoint(self, node_count: int) -> bool:
-        return node_count % self.checkpoint_frequency == 0
+class ReactiveSmartGraph:
+    def __init__(self):
+        self.pipelines: Dict[str, Pipeline] = {}
+        self.connections: Dict[str, Dict[str, List[Dict[str, str]]]] = {}
+        self.is_compiled = False
+        self.runtime_args: Dict[str, Any] = {}
 
-    def add_node(self, node: BaseNode) -> None:
-        GraphUtils.add_node(self.graph, node)
+    def create_pipeline(self, name: str) -> Pipeline:
+        if name in self.pipelines:
+            raise ConfigurationError(f"Pipeline {name} already exists")
+        pipeline = Pipeline(name)
+        self.pipelines[name] = pipeline
+        self.connections[name] = {}
+        logger.info(f"Created pipeline {name}")
+        return pipeline
 
-    def add_edge(self, edge: "Edge") -> None:
-        GraphUtils.add_edge(self.graph, edge)
+    def connect_components(
+        self,
+        source_pipeline: str,
+        source_component: str,
+        target_pipeline: str,
+        target_component: str,
+    ):
+        if source_pipeline not in self.pipelines or target_pipeline not in self.pipelines:
+            raise ConfigurationError(
+                f"Invalid pipeline connection: {source_pipeline} -> {target_pipeline}"
+            )
 
-    def draw_graph(self, output_file: Optional[str] = None, **kwargs: Any) -> None:
-        """Draw the graph using the GraphVisualizer.
+        if source_pipeline not in self.connections:
+            self.connections[source_pipeline] = {}
 
-        Args:
-            output_file (Optional[str]): If provided, save the visualization to this file.
-            **kwargs: Additional keyword arguments for customization.
-        """
-        GraphVisualizer.draw_graph(self.graph, output_file, **kwargs)
+        if source_component not in self.connections[source_pipeline]:
+            self.connections[source_pipeline][source_component] = []
 
-    def generate_mermaid_diagram(self) -> str:
-        """Generate a Mermaid diagram representation of the graph.
+        self.connections[source_pipeline][source_component].append(
+            {"target_pipeline": target_pipeline, "target_component": target_component}
+        )
+        logger.info(
+            f"Connected {source_pipeline}.{source_component} to {target_pipeline}.{target_component}"
+        )
 
-        Returns:
-            str: Mermaid diagram representation of the graph.
-        """
-        return GraphVisualizer.generate_mermaid_diagram(self.graph)
+    def compile(self, **runtime_args):
+        logger.info("Starting graph compilation")
+        self.runtime_args = runtime_args
+        self._check_orphaned_components()
+        self._check_cyclic_connections()
+        self._check_unbounded_recursion()
 
+        # Connect components within pipelines
+        for pipeline in self.pipelines.values():
+            components = list(pipeline.components.values())
+            for i in range(len(components) - 1):
+                components[i].output.subscribe(components[i + 1].input)
+
+        # Connect components across pipelines
+        for source_pipeline, connections in self.connections.items():
+            for source_component, targets in connections.items():
+                source = self.pipelines[source_pipeline].components[source_component]
+                for target in targets:
+                    target_component = self.pipelines[target["target_pipeline"]].components[
+                        target["target_component"]
+                    ]
+                    source.output.subscribe(target_component.input)
+
+        self.is_compiled = True
+        logger.info("Graph compiled successfully")
+
+    def _check_orphaned_components(self):
+        all_components = set()
+        pipeline_components = set()
+
+        # Collect all components and components in pipelines
+        for pipeline_name, pipeline in self.pipelines.items():
+            for component_name in pipeline.components:
+                all_components.add(f"{pipeline_name}.{component_name}")
+                pipeline_components.add(f"{pipeline_name}.{component_name}")
+
+        # Check for components in connections that are not in any pipeline
+        for pipeline_name, connections in self.connections.items():
+            for component_name, targets in connections.items():
+                all_components.add(f"{pipeline_name}.{component_name}")
+                for target in targets:
+                    all_components.add(f"{target['target_pipeline']}.{target['target_component']}")
+
+        # Identify orphaned components
+        orphaned = all_components - pipeline_components
+        if orphaned:
+            raise CompilationError(f"Orphaned components detected: {orphaned}")
+
+    def _check_cyclic_connections(self):
+        def dfs(node, visited, rec_stack):
+            visited.add(node)
+            rec_stack.add(node)
+
+            pipeline_name, component_name = node.split(".")
+            if (
+                pipeline_name in self.connections
+                and component_name in self.connections[pipeline_name]
+            ):
+                for target in self.connections[pipeline_name][component_name]:
+                    neighbor = f"{target['target_pipeline']}.{target['target_component']}"
+                    if neighbor not in visited:
+                        if dfs(neighbor, visited, rec_stack):
+                            return True
+                    elif neighbor in rec_stack:
+                        return True
+
+            rec_stack.remove(node)
+            return False
+
+        visited = set()
+        rec_stack = set()
+
+        for pipeline_name, pipeline in self.pipelines.items():
+            for component_name in pipeline.components:
+                node = f"{pipeline_name}.{component_name}"
+                if node not in visited:
+                    if dfs(node, visited, rec_stack):
+                        raise CompilationError("Cyclic connections detected in the graph")
+
+    def _check_unbounded_recursion(self):
+        max_depth = self.runtime_args.get("max_depth", 100)
+        for pipeline_name, pipeline in self.pipelines.items():
+            for component_name in pipeline.components:
+                stack = [(pipeline_name, component_name, 0)]
+                while stack:
+                    current_pipeline, current_component, depth = stack.pop()
+                    if depth > max_depth:
+                        raise CompilationError(
+                            f"Potential unbounded recursion detected starting from {current_pipeline}.{current_component}"
+                        )
+                    if (
+                        current_pipeline in self.connections
+                        and current_component in self.connections[current_pipeline]
+                    ):
+                        for target in self.connections[current_pipeline][current_component]:
+                            stack.append(
+                                (target["target_pipeline"], target["target_component"], depth + 1)
+                            )
+
+    def execute(
+        self, pipeline_name: str, input_data: Any, timeout: Optional[float] = None
+    ) -> Observable:
+        if not self.is_compiled:
+            return Observable.throw(CompilationError("Graph must be compiled before execution"))
+
+        if pipeline_name not in self.pipelines:
+            return Observable.throw(ConfigurationError(f"Pipeline {pipeline_name} does not exist"))
+
+        pipeline = self.pipelines[pipeline_name]
+
+        def subscribe(observer, scheduler=None):
+            async def process_pipeline():
+                try:
+                    current_data = input_data
+                    for component in pipeline.components.values():
+                        if asyncio.iscoroutinefunction(component.process):
+                            current_data = await component.process(current_data)
+                        else:
+                            current_data = component.process(current_data)
+                    observer.on_next(current_data)
+                    observer.on_completed()
+                except Exception as e:
+                    observer.on_error(e)
+
+            task = asyncio.create_task(process_pipeline())
+
+            if timeout is not None:
+                asyncio.create_task(self._cancel_after_timeout(task, timeout, observer))
+
+        return Observable(subscribe)
+
+    async def _cancel_after_timeout(self, task, timeout, observer):
+        await asyncio.sleep(timeout)
+        if not task.done():
+            task.cancel()
+            observer.on_error(TimeoutError(f"Execution timed out after {timeout} seconds"))
+
+    async def execute_and_await(
+        self, pipeline_name: str, input_data: Any, timeout: Optional[float] = None
+    ) -> Any:
+        observable = self.execute(pipeline_name, input_data, timeout)
+        return await process_observable(observable)

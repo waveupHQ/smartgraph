@@ -1,10 +1,9 @@
 # smartgraph/__init__.py
 
-from .actors import Actor, AIActor, HumanActor
-from .base import BaseActor, BaseNode, Task
-from .core import Edge, Node, SmartGraph
+# Import all components
+from .components import *
+from .core import Pipeline, ReactiveComponent, ReactiveSmartGraph
 from .exceptions import (
-    ActorExecutionError,
     ConfigurationError,
     ExecutionError,
     GraphStructureError,
@@ -12,32 +11,60 @@ from .exceptions import (
     SmartGraphException,
     ValidationError,
 )
+from .graph_visualizer import GraphVisualizer
 from .logging import SmartGraphLogger
-from .memory import MemoryManager
-from .reducers import dict_update_reducer, list_append_reducer, max_reducer
 
-__all__ = [
-    "SmartGraph",
-    "Node",
-    "Edge",
-    "Task",
-    "BaseActor",
-    "BaseNode",
-    "Actor",
-    "HumanActor",
-    "AIActor",
-    "MemoryManager",
-    "dict_update_reducer",
-    "list_append_reducer",
-    "max_reducer",
+# Import all toolkits
+from .tools import *
+from .tools.memory_toolkit import MemoryToolkit
+from .utils import process_observable
+
+# List of core classes
+__core_classes__ = [
+    "ReactiveComponent",
+    "Pipeline",
+    "ReactiveSmartGraph",
+    "SmartGraphLogger",
+    "GraphVisualizer",
     "SmartGraphException",
     "ExecutionError",
     "ConfigurationError",
     "ValidationError",
     "MemoryError",
     "GraphStructureError",
-    "ActorExecutionError",
-    "SmartGraphLogger",
+    "GraphVisualizer",
 ]
 
-__version__ = "0.1.0"
+# Combine core classes, components, and toolkits
+__all__ = __core_classes__ + [
+    "AggregatorComponent",
+    "FilterComponent",
+    "TransformerComponent",
+    "BranchingComponent",
+    "AsyncAPIComponent",
+    "RetryComponent",
+    "CacheComponent",
+    "ValidationComponent",
+    "BaseInputHandler",
+    "UnstructuredDataInputHandler",
+    "StructuredDataInputHandler",
+    "TextInputHandler",
+    "FileUploadHandler",
+    "ImageUploadHandler",
+    "VideoUploadHandler",
+    "SpeechInputHandler",
+    "CommandLineInputHandler",
+    "JSONInputHandler",
+    "XMLInputHandler",
+    "CSVInputHandler",
+    "YAMLInputHandler",
+    "ParquetInputHandler",
+    "StructuredDataDetector",
+    "HumanInTheLoopComponent",
+    "MemoryToolkit",
+    "DuckDuckGoToolkit",
+    "TavilyToolkit",
+    "process_observable",
+]
+
+__version__ = "0.0.3"

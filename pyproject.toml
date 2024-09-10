@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "smartgraph"
 version = "0.1.0"
-description = "A library for building stateful, multi-actor applications with Smart Graph"
-authors = ["Your Name <your.email@example.com>"]
+description = "A Python library for building stateful, multi-component applications with Large Language Models (LLMs)."
+authors = ["Jeblister"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "smartgraph"}]
@@ -11,7 +11,6 @@ packages = [{include = "smartgraph"}]
 python = "^3.11"
 anthropic = "^0.30.0"
 python-dotenv = "^1.0.1"
-networkx = "^2.8"
 litellm = "^1.41.15"
 pydantic = "^2.8.2"
 matplotlib = "^3.9.1"
@@ -21,6 +20,10 @@ aiofiles = "^24.1.0"
 requests = "^2.32.3"
 duckduckgo-search = "^6.2.0"
 jsonpickle = "^3.2.2"
+rich = "^13.7.1"
+reactivex = "^4.0.4"
+tavily-python = "^0.3.5"
+duckdb = "^1.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0.0"
@@ -30,6 +33,7 @@ pre-commit = "^3.7.1"
 mypy = "^1.10.1"
 isort = "^5.13.2"
 pytest-asyncio = "^0.23.7"
+fastapi = "^0.111.1"
 
 [build-system]
 requires = ["poetry-core"]

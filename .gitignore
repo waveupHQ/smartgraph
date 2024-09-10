@@ -145,3 +145,4 @@ htmlcov/
 #Memory
 /checkpoints
 memory.md
+*.duckdb
