@@ -67,4 +67,4 @@ __all__ = __core_classes__ + [
     "process_observable",
 ]
 
-__version__ = "0.0.3"
+__version__ = "0.2.0"
