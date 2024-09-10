@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "smartgraph"
-version = "0.1.0"
+version = "0.2.0"
 description = "A Python library for building stateful, multi-component applications with Large Language Models (LLMs)."
 authors = ["Jeblister"]
 license = "MIT"
