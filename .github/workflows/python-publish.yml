@@ -43,17 +43,17 @@ jobs:
       run: poetry install --no-interaction --no-root
     - name: Build package
       run: poetry build
+    - name: Configure TestPyPI
+      if: github.event.inputs.environment == 'testpypi' || github.event_name == 'release'
+      run: |
+        poetry config repositories.testpypi https://test.pypi.org/legacy/
+        poetry config pypi-token.testpypi ${{ secrets.TEST_PYPI_API_TOKEN }}
     - name: Publish to TestPyPI
       if: github.event.inputs.environment == 'testpypi' || github.event_name == 'release'
-      env:
-        PYPI_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
-      run: |
-        poetry config pypi-token.testpypi $PYPI_TOKEN
-        poetry publish -r testpypi
+      run: poetry publish -r testpypi
+    - name: Configure PyPI
+      if: github.event.inputs.environment == 'pypi' || github.event_name == 'release'
+      run: poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
     - name: Publish to PyPI
       if: github.event.inputs.environment == 'pypi' || github.event_name == 'release'
-      env:
-        PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        poetry config pypi-token.pypi $PYPI_TOKEN
-        poetry publish
+      run: poetry publish
