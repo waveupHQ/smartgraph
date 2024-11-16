@@ -98,7 +98,7 @@ This example demonstrates how SmartGraph can be used to create a simple API for 
 
 ## Documentation
 
-For more detailed information on how to use SmartGraph, please refer to our [documentation](https:smartgraph.waveup.dev).
+For more detailed information on how to use SmartGraph, please refer to our [documentation](https://smart.waveup.dev).
 
 ## Core Concepts
 
